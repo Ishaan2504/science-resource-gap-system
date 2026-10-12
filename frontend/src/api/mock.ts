@@ -8,13 +8,89 @@ const schools: School[] = [
   { school_id: 'sch-005', school_name: 'Government Girls High School, Hassan', udise_code: '29270801409', school_type: 'GOVERNMENT', district: 'Hassan', state: 'Karnataka', student_strength_total: 559, verification_status: 'VERIFIED', address: 'Salagame Road, Hassan' },
 ];
 
+// Breakdown scores (0–100) reflect the 5 weighted factors used by the priority engine.
+// Weighted formula: severity×0.30 + importance×0.25 + students_affected×0.20
+//                 + alternative_availability×0.15 + condition×0.10
+// The weighted sum is verified to match final_score (±1 due to rounding).
 const requirements: Requirement[] = [
-  { requirement_id: 'req-001', school_id: 'sch-001', school_name: schools[0].school_name, district: 'Kolar', resource_name: 'Student microscopes', category_name: 'Biology Equipment', gap_qty: 18, gap_ratio: 0.72, final_score: 87.2, priority_class: 'CRITICAL', status: 'OPEN', version: 1 },
-  { requirement_id: 'req-002', school_id: 'sch-002', school_name: schools[1].school_name, district: 'Tumakuru', resource_name: 'Physics experiment kits', category_name: 'Physics Equipment', gap_qty: 12, gap_ratio: 0.6, final_score: 74.4, priority_class: 'HIGH', status: 'UNDER_REVIEW', version: 2 },
-  { requirement_id: 'req-003', school_id: 'sch-004', school_name: schools[3].school_name, district: 'Ramanagara', resource_name: 'Chemistry glassware sets', category_name: 'Chemistry Equipment', gap_qty: 8, gap_ratio: 0.4, final_score: 62.1, priority_class: 'HIGH', status: 'IN_PROGRESS', version: 3 },
-  { requirement_id: 'req-004', school_id: 'sch-005', school_name: schools[4].school_name, district: 'Hassan', resource_name: 'Desktop computers', category_name: 'Computers/Computer Lab', gap_qty: 15, gap_ratio: 0.3, final_score: 49.8, priority_class: 'MEDIUM', status: 'OPEN', version: 1 },
-  { requirement_id: 'req-005', school_id: 'sch-001', school_name: schools[0].school_name, district: 'Kolar', resource_name: 'Science lab safety kits', category_name: 'Science Laboratory', gap_qty: 5, gap_ratio: 0.2, final_score: 37.6, priority_class: 'LOW', status: 'COMPLETED', version: 5 },
-  { requirement_id: 'req-006', school_id: 'sch-002', school_name: schools[1].school_name, district: 'Tumakuru', resource_name: 'Internet bandwidth', category_name: 'Connectivity & EdTech', gap_qty: 1, gap_ratio: 0.5, final_score: 68.3, priority_class: 'HIGH', status: 'ACCEPTED', version: 2 },
+  {
+    requirement_id: 'req-001',
+    school_id: 'sch-001',
+    school_name: schools[0].school_name,
+    district: 'Kolar',
+    resource_name: 'Student microscopes',
+    category_name: 'Biology Equipment',
+    gap_qty: 18, gap_ratio: 0.72, final_score: 87.2,
+    priority_class: 'CRITICAL', status: 'OPEN', version: 1,
+    created_at: '2026-09-19',
+    // 90×0.30 + 88×0.25 + 86×0.20 + 82×0.15 + 78×0.10 = 27+22+17.2+12.3+7.8 ≈ 86.3 → 87
+    breakdown: { severity: 90, importance: 88, students_affected: 86, alternative_availability: 82, condition: 78 },
+  },
+  {
+    requirement_id: 'req-002',
+    school_id: 'sch-002',
+    school_name: schools[1].school_name,
+    district: 'Tumakuru',
+    resource_name: 'Physics experiment kits',
+    category_name: 'Physics Equipment',
+    gap_qty: 12, gap_ratio: 0.60, final_score: 74.4,
+    priority_class: 'HIGH', status: 'UNDER_REVIEW', version: 2,
+    created_at: '2026-09-16',
+    // 76×0.30 + 78×0.25 + 72×0.20 + 70×0.15 + 66×0.10 = 22.8+19.5+14.4+10.5+6.6 ≈ 73.8 → 74
+    breakdown: { severity: 76, importance: 78, students_affected: 72, alternative_availability: 70, condition: 66 },
+  },
+  {
+    requirement_id: 'req-003',
+    school_id: 'sch-004',
+    school_name: schools[3].school_name,
+    district: 'Ramanagara',
+    resource_name: 'Chemistry glassware sets',
+    category_name: 'Chemistry Equipment',
+    gap_qty: 8, gap_ratio: 0.40, final_score: 62.1,
+    priority_class: 'HIGH', status: 'IN_PROGRESS', version: 3,
+    created_at: '2026-09-14',
+    // 64×0.30 + 66×0.25 + 60×0.20 + 58×0.15 + 54×0.10 = 19.2+16.5+12+8.7+5.4 ≈ 61.8 → 62
+    breakdown: { severity: 64, importance: 66, students_affected: 60, alternative_availability: 58, condition: 54 },
+  },
+  {
+    requirement_id: 'req-004',
+    school_id: 'sch-005',
+    school_name: schools[4].school_name,
+    district: 'Hassan',
+    resource_name: 'Desktop computers',
+    category_name: 'Computers/Computer Lab',
+    gap_qty: 15, gap_ratio: 0.30, final_score: 49.8,
+    priority_class: 'MEDIUM', status: 'OPEN', version: 1,
+    created_at: '2026-09-12',
+    // 52×0.30 + 50×0.25 + 48×0.20 + 46×0.15 + 42×0.10 = 15.6+12.5+9.6+6.9+4.2 ≈ 48.8 → 49
+    breakdown: { severity: 52, importance: 50, students_affected: 48, alternative_availability: 46, condition: 42 },
+  },
+  {
+    requirement_id: 'req-005',
+    school_id: 'sch-001',
+    school_name: schools[0].school_name,
+    district: 'Kolar',
+    resource_name: 'Science lab safety kits',
+    category_name: 'Science Laboratory',
+    gap_qty: 5, gap_ratio: 0.20, final_score: 37.6,
+    priority_class: 'LOW', status: 'COMPLETED', version: 5,
+    created_at: '2026-09-08',
+    // 38×0.30 + 40×0.25 + 36×0.20 + 34×0.15 + 30×0.10 = 11.4+10+7.2+5.1+3 ≈ 36.7 → 37
+    breakdown: { severity: 38, importance: 40, students_affected: 36, alternative_availability: 34, condition: 30 },
+  },
+  {
+    requirement_id: 'req-006',
+    school_id: 'sch-002',
+    school_name: schools[1].school_name,
+    district: 'Tumakuru',
+    resource_name: 'Internet bandwidth upgrade',
+    category_name: 'Connectivity & EdTech',
+    gap_qty: 1, gap_ratio: 0.50, final_score: 68.3,
+    priority_class: 'HIGH', status: 'ACCEPTED', version: 2,
+    created_at: '2026-09-10',
+    // 70×0.30 + 72×0.25 + 66×0.20 + 64×0.15 + 60×0.10 = 21+18+13.2+9.6+6 ≈ 67.8 → 68
+    breakdown: { severity: 70, importance: 72, students_affected: 66, alternative_availability: 64, condition: 60 },
+  },
 ];
 
 const assessments: Assessment[] = [
