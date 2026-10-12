@@ -2,7 +2,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { apiMode } from './api/client';
 import { useAuth } from './auth/AuthContext';
 import type { Role } from './types';
-import { PortalLayout } from './components/PortalLayout';
+import { AppShell } from './components/AppShell';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SchoolsPage, SchoolDetailPage, SchoolFormPage } from './pages/SchoolsPage';
@@ -15,7 +15,12 @@ import { UserManagementPage } from './pages/UserManagementPage';
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <main className="main-content" aria-live="polite">Checking sign-in status…</main>;
+  if (loading)
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-[#f4f6f9] text-[#6b7c93] text-sm" aria-live="polite">
+        Verifying your session…
+      </main>
+    );
   return user ? <>{children}</> : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
 
@@ -32,11 +37,10 @@ function RoleOnly({ children, roles }: { children: React.ReactNode; roles: Role[
 
 export function App() {
   const { user } = useAuth();
-  return <>
-    {apiMode === 'mock' && user && <div className="demo-banner">Demonstration data is enabled. Changes are not sent to the backend.</div>}
+  return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route element={<Protected><PortalLayout /></Protected>}>
+      <Route element={<Protected><AppShell /></Protected>}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/schools" element={<SchoolsPage />} />
@@ -54,5 +58,5 @@ export function App() {
       </Route>
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     </Routes>
-  </>;
+  );
 }
