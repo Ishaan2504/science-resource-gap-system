@@ -42,6 +42,23 @@ export interface Requirement {
   status: RequirementStatus;
   version: number;
   data_changed_since_acceptance?: boolean;
+  assigned_ngo?: string;
+  created_at?: string;
+  breakdown?: {
+    severity: number;
+    importance: number;
+    students_affected: number;
+    alternative_availability: number;
+    condition: number;
+  };
+}
+
+export interface PortalActivity {
+  id: string;
+  at: string;
+  actor: string;
+  text: string;
+  kind: 'info' | 'success' | 'warning' | 'error';
 }
 
 export interface Page<T> {
