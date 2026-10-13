@@ -92,62 +92,22 @@ async function seedSampleData() {
     }
 
     // ============================================================================
-    // 3. CREATE SCHOOLS
+    // 3. CREATE SCHOOLS (from SoW_Scheduled_Complete.xlsx)
     // ============================================================================
     console.log('\n🏫 Creating schools...');
     
-    const schools = [
-      {
-        name: 'Government Higher Secondary School, Bangalore',
-        udise: '29200401201',
-        type: 'GOVERNMENT',
-        district: 'Bangalore Urban',
-        state: 'Karnataka',
-        strength: 842,
-        address: 'M.G. Road, Bangalore, Karnataka - 560001',
-        user_id: schoolUserId // Linked to school user
-      },
-      {
-        name: 'Government High School, Mysore',
-        udise: '29210502304',
-        type: 'GOVERNMENT',
-        district: 'Mysore',
-        state: 'Karnataka',
-        strength: 615,
-        address: 'Sayyaji Rao Road, Mysore, Karnataka - 570001',
-        user_id: null // Will create user
-      },
-      {
-        name: 'Government Composite School, Tumkur',
-        udise: '29220603405',
-        type: 'GOVERNMENT',
-        district: 'Tumkur',
-        state: 'Karnataka',
-        strength: 731,
-        address: 'B.H. Road, Tumkur, Karnataka - 572101',
-        user_id: null // Will create user
-      },
-      {
-        name: 'Aided High School, Hassan',
-        udise: '29230704506',
-        type: 'AIDED',
-        district: 'Hassan',
-        state: 'Karnataka',
-        strength: 559,
-        address: 'Church Road, Hassan, Karnataka - 573201',
-        user_id: null // Will create user
-      },
-      {
-        name: 'Government Girls High School, Mandya',
-        udise: '29240805607',
-        type: 'GOVERNMENT',
-        district: 'Mandya',
-        state: 'Karnataka',
-        strength: 478,
-        address: 'K.R. Circle, Mandya, Karnataka - 571401',
-        user_id: null // Will create user
-      }
-    ];
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const excelSchoolsData = require('./schools-data.json');
+    const schools = excelSchoolsData.map((s: { school_name: string; udise_code: string; school_type: string; district: string; state: string; student_strength_total: number; address: string }, idx: number) => ({
+      name: s.school_name,
+      udise: s.udise_code,
+      type: s.school_type,
+      district: s.district,
+      state: s.state,
+      strength: s.student_strength_total,
+      address: s.address,
+      user_id: idx === 0 ? schoolUserId : null,
+    }));
 
     const schoolIds: string[] = [];
     for (const school of schools) {
