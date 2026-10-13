@@ -1,7 +1,12 @@
 import { Pool } from 'pg';
 import { env } from '../config/env';
 
-export const pool = new Pool({ connectionString: env.databaseUrl, max: 20 });
+const isRemote = env.databaseUrl.includes('supabase.co') || env.databaseUrl.includes('sslmode=') || !env.databaseUrl.includes('localhost');
+export const pool = new Pool({
+  connectionString: env.databaseUrl,
+  max: 20,
+  ssl: isRemote ? { rejectUnauthorized: false } : undefined,
+});
 
 export async function inTransaction<T>(fn: (client: import('pg').PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
