@@ -44,7 +44,7 @@ export function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/schools" element={<SchoolsPage />} />
-        <Route path="/schools/new" element={<RoleOnly roles={['SCHOOL']}><SchoolFormPage /></RoleOnly>} />
+        <Route path="/schools/new" element={<RoleOnly roles={['SCHOOL', 'ADMIN']}><SchoolFormPage /></RoleOnly>} />
         <Route path="/schools/:id" element={<RoleOnly roles={['SCHOOL','ADMIN','FIELD_COORDINATOR']}><SchoolDetailPage /></RoleOnly>} />
         <Route path="/schools/:id/edit" element={<RoleOnly roles={['SCHOOL','ADMIN','FIELD_COORDINATOR']}><SchoolFormPage /></RoleOnly>} />
         <Route path="/assessments" element={<AssessmentsPage />} />
