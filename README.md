@@ -73,6 +73,9 @@ npm run migrate
 # Create admin user
 npm run seed:admin
 
+# Import Excel schools schedule into Supabase (131+ schools with user accounts)
+npx tsx src/db/import-excel-schools.ts
+
 # (Optional) Add sample data
 npm run seed:sample
 ```
