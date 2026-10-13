@@ -27,7 +27,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  type TooltipProps,
 } from 'recharts';
 
 // ─── Design token colours ─────────────────────────────────────────────────────
@@ -314,7 +313,7 @@ export interface DonutChartCardProps {
 }
 
 // Custom tooltip for donut — shows name + value + %
-function DonutTooltip({ active, payload }: TooltipProps<number, string>) {
+function DonutTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
   if (!active || !payload?.length) return null;
   const entry = payload[0];
   const total = payload[0]?.payload?.total as number | undefined;

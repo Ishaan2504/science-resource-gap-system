@@ -4,8 +4,7 @@ import { ArrowUpDown, Search } from 'lucide-react';
 import { api, apiMode } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useAsync } from '../hooks/useAsync';
-import { mockSchools } from '../api/mock';
-import type { Requirement, RequirementStatus, ResourceCategory } from '../types';
+import type { Requirement, RequirementStatus } from '../types';
 import {
   GovAlert,
   GovBadge,
@@ -13,7 +12,6 @@ import {
   GovCard,
   GovField,
   GovPageHeader,
-  GovProgress,
   CardHeader,
   CardBody,
   inputCls,
@@ -112,7 +110,6 @@ export function RequirementsPage() {
 
   const PAGE_SIZE = 10;
 
-  const categories = useAsync(() => api.resources.categories());
   const result = useAsync(
     () =>
       api.requirements.list({

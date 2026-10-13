@@ -15,7 +15,7 @@ import {
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useAsync } from '../hooks/useAsync';
-import { mockSchools, mockSummaryStats } from '../api/mock';
+import { mockSchools } from '../api/mock';
 import type { Requirement, School } from '../types';
 import {
   ActivityTimeline,

@@ -158,9 +158,9 @@ export function LoginPage() {
   const t = T[lang];
   const istTime = useISTClock();
 
-  const [role, setRole] = useState<Role>(apiMode === 'mock' ? 'ADMIN' : 'SCHOOL');
-  const [identifier, setIdentifier] = useState(apiMode === 'mock' ? 'admin@example.com' : '');
-  const [password, setPassword] = useState(apiMode === 'mock' ? 'Test123456' : '');
+  const [role, setRole] = useState<Role>('ADMIN');
+  const [identifier, setIdentifier] = useState('admin@example.com');
+  const [password, setPassword] = useState('Test123456');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -329,41 +329,41 @@ export function LoginPage() {
                   </div>
                 )}
 
-                {/* Quick demo credentials in mock mode */}
-                {apiMode === 'mock' && (
-                  <div className="p-3 bg-[#eef5fc] border border-[#bcd6f3] rounded-sm text-xs text-[#0f3460] space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-[11px] uppercase tracking-wider text-[#0f3460]">Demo Accounts (Password: Test123456)</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { r: 'ADMIN' as Role, email: 'admin@example.com', label: 'Admin' },
-                        { r: 'NGO' as Role, email: 'ngo@example.com', label: 'NGO' },
-                        { r: 'SCHOOL' as Role, email: 'school@example.com', label: 'School' },
-                        { r: 'FIELD_COORDINATOR' as Role, email: 'coordinator@example.com', label: 'Coordinator' },
-                      ].map((item) => (
-                        <button
-                          key={item.r}
-                          type="button"
-                          onClick={() => {
-                            setRole(item.r);
-                            setIdentifier(item.email);
-                            setPassword('Test123456');
-                            setError('');
-                          }}
-                          className={`px-2 py-1.5 text-left rounded-sm border text-xs transition-all ${
-                            role === item.r
-                              ? 'bg-[#0f3460] text-white border-[#0f3460] font-semibold shadow-xs'
-                              : 'bg-white hover:bg-[#e0efff] text-[#0f3460] border-[#b0c8e4]'
-                          }`}
-                        >
-                          <div className="font-semibold text-[11px] leading-tight">{item.label}</div>
-                          <div className="text-[10px] opacity-80 truncate">{item.email}</div>
-                        </button>
-                      ))}
-                    </div>
+                {/* Quick login credentials */}
+                <div className="p-3 bg-[#eef5fc] border border-[#bcd6f3] rounded-sm text-xs text-[#0f3460] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[11px] uppercase tracking-wider text-[#0f3460]">
+                      {apiMode === 'live' ? 'Database Accounts (Live Supabase · Test123456)' : 'Demo Accounts (Password: Test123456)'}
+                    </span>
                   </div>
-                )}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { r: 'ADMIN' as Role, email: 'admin@example.com', label: 'Admin' },
+                      { r: 'NGO' as Role, email: 'ngo@example.com', label: 'NGO' },
+                      { r: 'SCHOOL' as Role, email: 'school@example.com', label: 'School' },
+                      { r: 'FIELD_COORDINATOR' as Role, email: 'coordinator@example.com', label: 'Coordinator' },
+                    ].map((item) => (
+                      <button
+                        key={item.r}
+                        type="button"
+                        onClick={() => {
+                          setRole(item.r);
+                          setIdentifier(item.email);
+                          setPassword('Test123456');
+                          setError('');
+                        }}
+                        className={`px-2 py-1.5 text-left rounded-sm border text-xs transition-all ${
+                          role === item.r
+                            ? 'bg-[#0f3460] text-white border-[#0f3460] font-semibold shadow-xs'
+                            : 'bg-white hover:bg-[#e0efff] text-[#0f3460] border-[#b0c8e4]'
+                        }`}
+                      >
+                        <div className="font-semibold text-[11px] leading-tight">{item.label}</div>
+                        <div className="text-[10px] opacity-80 truncate">{item.email}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <form id="login-form" onSubmit={handleSubmit} noValidate className="space-y-4">
                   {/* Role */}
@@ -374,18 +374,14 @@ export function LoginPage() {
                         onChange={(e) => {
                           const newRole = e.target.value as Role;
                           setRole(newRole);
-                          if (apiMode === 'mock') {
-                            const creds: Record<Role, string> = {
-                              ADMIN: 'admin@example.com',
-                              NGO: 'ngo@example.com',
-                              SCHOOL: 'school@example.com',
-                              FIELD_COORDINATOR: 'coordinator@example.com',
-                            };
-                            setIdentifier(creds[newRole] || '');
-                            setPassword('Test123456');
-                          } else {
-                            setIdentifier('');
-                          }
+                          const creds: Record<Role, string> = {
+                            ADMIN: 'admin@example.com',
+                            NGO: 'ngo@example.com',
+                            SCHOOL: 'school@example.com',
+                            FIELD_COORDINATOR: 'coordinator@example.com',
+                          };
+                          setIdentifier(creds[newRole] || '');
+                          setPassword('Test123456');
                         }}
                         className={`${inputCls} appearance-none pr-9`}>
                         <option value="SCHOOL">{t.roleSchool}</option>

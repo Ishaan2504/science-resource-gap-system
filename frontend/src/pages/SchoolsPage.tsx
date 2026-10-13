@@ -46,7 +46,8 @@ export function SchoolsPage() {
   if (apiMode === 'mock' && user?.role === 'SCHOOL') {
     rows = rows.filter((r) => r.school_id === 'sch-001');
   }
-  const districts = [...new Set(mockSchools.map((s) => s.district))];
+  const maharashtraDistricts = ['Nagpur', 'Amravati', 'Bhandara', 'Yavatmal', 'Akola', 'Chandrapur', 'Buldhana', 'Gondia', 'Wardha', 'Washim', 'Gadchiroli'];
+  const districts = [...new Set([...maharashtraDistricts, ...mockSchools.map((s) => s.district), ...rows.map((s) => s.district)])].filter(Boolean).sort();
 
   return (
     <>
@@ -61,12 +62,6 @@ export function SchoolsPage() {
           ) : undefined
         }
       />
-
-      {apiMode === 'live' && (
-        <GovAlert tone="info" className="mb-4">
-          The backend supports school profile details and creation. Filtered browsing is currently running in demonstration mode.
-        </GovAlert>
-      )}
 
       <GovFilterPanel>
         <GovField label="Search school or UDISE+ code" htmlFor="school-search">
