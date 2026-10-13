@@ -223,7 +223,7 @@ export function SchoolDetailPage() {
                 Edit profile
               </GovButton>
             )}
-            {(apiMode === 'mock' || user?.role === 'SCHOOL' || user?.role === 'FIELD_COORDINATOR') && (
+            {user?.role !== 'ADMIN' && (user?.role === 'SCHOOL' || user?.role === 'FIELD_COORDINATOR') && (
               <GovButton variant="primary" onClick={() => navigate(`/assessments/new?school=${id}`)}>
                 Record assessment
               </GovButton>

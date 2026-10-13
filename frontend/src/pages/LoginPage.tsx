@@ -158,9 +158,9 @@ export function LoginPage() {
   const t = T[lang];
   const istTime = useISTClock();
 
-  const [role, setRole] = useState<Role>('SCHOOL');
-  const [identifier, setIdentifier] = useState(apiMode === 'mock' ? 'district.office@gov.example' : '');
-  const [password, setPassword] = useState(apiMode === 'mock' ? 'Demonstration2026' : '');
+  const [role, setRole] = useState<Role>(apiMode === 'mock' ? 'ADMIN' : 'SCHOOL');
+  const [identifier, setIdentifier] = useState(apiMode === 'mock' ? 'admin@example.com' : '');
+  const [password, setPassword] = useState(apiMode === 'mock' ? 'Test123456' : '');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -234,17 +234,24 @@ export function LoginPage() {
 
       {/* ── 2. MAIN HEADER ─────────────────────────────────────────────── */}
       <header className="bg-white border-b border-[#d1d5db]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-1 min-w-0">
-            <div className="flex-shrink-0"><MinistryEmblem size={72} /></div>
+            <div className="flex-shrink-0"><MinistryEmblem size={68} /></div>
             <div className="min-w-0">
               <p className="text-[#0f3460] font-bold text-base sm:text-lg leading-snug">{t.ministry}</p>
               <p className="text-[#4b6077] text-sm sm:text-base leading-snug">{t.ministrySub}</p>
             </div>
           </div>
-          <div className="sm:text-right text-center flex-shrink-0 max-w-sm">
-            <p className="text-[11px] uppercase tracking-widest text-[#6b7c93] font-semibold mb-0.5">{t.portalShort}</p>
-            <p className="text-[#0f3460] font-semibold text-[13px] leading-snug hidden lg:block">{t.portalTitle}</p>
+          <div className="hidden sm:flex items-center text-right flex-shrink-0">
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wider text-[#6b7c93] font-semibold">
+                {lang === 'hi' ? 'गेटवे स्थिति' : 'System Gateway'}
+              </p>
+              <p className="text-xs font-semibold text-[#128807] flex items-center gap-1.5 justify-end">
+                <span className="w-2 h-2 rounded-full bg-[#128807] animate-pulse"></span>
+                {lang === 'hi' ? 'सक्रिय एवं सुरक्षित' : 'Active & Secure'}
+              </p>
+            </div>
           </div>
         </div>
       </header>
@@ -257,7 +264,7 @@ export function LoginPage() {
         <div className="flex flex-col lg:flex-row flex-1">
 
           {/* LEFT — hero image panel */}
-          <div className="relative lg:flex-1 flex flex-col justify-end min-h-[300px] lg:min-h-0"
+          <div className="relative lg:flex-1 flex flex-col justify-start min-h-[300px] lg:min-h-0"
             style={{
               backgroundImage: `linear-gradient(135deg,rgba(15,52,96,0.92) 0%,rgba(15,52,96,0.80) 45%,rgba(15,52,96,0.55) 100%),url('${HERO_IMAGE_URL}')`,
               backgroundSize: 'cover', backgroundPosition: 'center',
@@ -279,17 +286,33 @@ export function LoginPage() {
                 <ShieldCheck size={18} className="text-[#FF9933] flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <p className="text-[#b8cfe8] text-xs leading-relaxed">{t.verificationNotice}</p>
               </div>
-              {apiMode === 'mock' && (
-                <div className="mt-4 border border-[#FF9933]/40 bg-[rgba(255,153,51,0.12)] rounded-sm p-3 max-w-lg">
-                  <p className="text-[#FFD580] text-xs">{t.demoMode}</p>
-                </div>
-              )}
             </div>
           </div>
 
           {/* RIGHT — login card */}
-          <div className="bg-[#f4f6f9] lg:w-[480px] xl:w-[520px] flex-shrink-0 flex items-start lg:items-center justify-center p-6 sm:p-10 lg:p-12">
-            <section className="w-full max-w-[420px] bg-white border border-[#d1d5db] rounded-sm" aria-labelledby="login-heading">
+          <div className="bg-[#f4f6f9] lg:w-[480px] xl:w-[520px] flex-shrink-0 flex flex-col items-center justify-center py-6 sm:py-8 lg:py-10 px-6 sm:px-10 lg:px-12">
+            {/* National Portal SSO Badge above Login Card */}
+            <div className="w-full max-w-[420px] mb-3.5 bg-white border border-[#d1d5db] rounded-sm p-3 shadow-2xs flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#0f3460]/10 flex items-center justify-center text-[#0f3460] flex-shrink-0 border border-[#0f3460]/20">
+                  <ShieldCheck size={16} className="text-[#0f3460]" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-[#0f3460] leading-snug">
+                    {lang === 'hi' ? 'राष्ट्रीय विज्ञान संसाधन पोर्टल' : 'National Science Resource Portal'}
+                  </p>
+                  <p className="text-[11px] text-[#4b6077] leading-tight">
+                    {lang === 'hi' ? 'एकल साइन-ऑन (SSO) अधिकृत गेटवे' : 'Single Sign-On (SSO) Authorised Access'}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 bg-[#f0fdf4] border border-[#86efac] px-2 py-0.5 rounded-xs text-[10px] font-semibold text-[#14532d]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a]"></span>
+                SSL Secure
+              </span>
+            </div>
+
+            <section className="w-full max-w-[420px] bg-white border border-[#d1d5db] rounded-sm shadow-xs" aria-labelledby="login-heading">
               {/* Card header */}
               <div className="bg-[#0f3460] rounded-t-sm px-6 py-4">
                 <h2 id="login-heading" className="text-white font-bold text-lg leading-snug">{t.signIn}</h2>
@@ -306,13 +329,64 @@ export function LoginPage() {
                   </div>
                 )}
 
+                {/* Quick demo credentials in mock mode */}
+                {apiMode === 'mock' && (
+                  <div className="p-3 bg-[#eef5fc] border border-[#bcd6f3] rounded-sm text-xs text-[#0f3460] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[11px] uppercase tracking-wider text-[#0f3460]">Demo Accounts (Password: Test123456)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { r: 'ADMIN' as Role, email: 'admin@example.com', label: 'Admin' },
+                        { r: 'NGO' as Role, email: 'ngo@example.com', label: 'NGO' },
+                        { r: 'SCHOOL' as Role, email: 'school@example.com', label: 'School' },
+                        { r: 'FIELD_COORDINATOR' as Role, email: 'coordinator@example.com', label: 'Coordinator' },
+                      ].map((item) => (
+                        <button
+                          key={item.r}
+                          type="button"
+                          onClick={() => {
+                            setRole(item.r);
+                            setIdentifier(item.email);
+                            setPassword('Test123456');
+                            setError('');
+                          }}
+                          className={`px-2 py-1.5 text-left rounded-sm border text-xs transition-all ${
+                            role === item.r
+                              ? 'bg-[#0f3460] text-white border-[#0f3460] font-semibold shadow-xs'
+                              : 'bg-white hover:bg-[#e0efff] text-[#0f3460] border-[#b0c8e4]'
+                          }`}
+                        >
+                          <div className="font-semibold text-[11px] leading-tight">{item.label}</div>
+                          <div className="text-[10px] opacity-80 truncate">{item.email}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <form id="login-form" onSubmit={handleSubmit} noValidate className="space-y-4">
                   {/* Role */}
                   <div className="space-y-1.5">
                     <label htmlFor="role-select" className="block text-sm font-semibold text-[#1e3a5f]">{t.role}</label>
                     <div className="relative">
                       <select id="role-select" value={role}
-                        onChange={(e) => { setRole(e.target.value as Role); setIdentifier(''); }}
+                        onChange={(e) => {
+                          const newRole = e.target.value as Role;
+                          setRole(newRole);
+                          if (apiMode === 'mock') {
+                            const creds: Record<Role, string> = {
+                              ADMIN: 'admin@example.com',
+                              NGO: 'ngo@example.com',
+                              SCHOOL: 'school@example.com',
+                              FIELD_COORDINATOR: 'coordinator@example.com',
+                            };
+                            setIdentifier(creds[newRole] || '');
+                            setPassword('Test123456');
+                          } else {
+                            setIdentifier('');
+                          }
+                        }}
                         className={`${inputCls} appearance-none pr-9`}>
                         <option value="SCHOOL">{t.roleSchool}</option>
                         <option value="NGO">{t.roleNgo}</option>

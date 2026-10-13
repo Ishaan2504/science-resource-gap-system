@@ -27,61 +27,26 @@ import type { Priority, RequirementStatus } from '../types';
 
 // ---------------------------------------------------------------------------
 // Ministry Emblem SVG Placeholder
-// Reusable across LoginPage, AppShell header, and exportable reports.
-// TODO: Replace with officially approved ministry emblem asset before production.
 // ---------------------------------------------------------------------------
-export function MinistryEmblem({ size = 48 }: { size?: number }) {
+// Emblem / Logo — Vibha (Vijnana Bharati) Logo
+// Reusable across LoginPage, AppShell header, and exportable reports.
+// ---------------------------------------------------------------------------
+export function MinistryEmblem({
+  size = 48,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) {
   return (
-    <svg
+    <img
+      src="/vibha-logo.png"
+      alt="Vibha - Vijnana Bharati Logo"
       width={size}
       height={size}
-      viewBox="0 0 80 80"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      focusable="false"
-      role="img"
-    >
-      <circle cx="40" cy="40" r="38" stroke="#0f3460" strokeWidth="2" fill="#f8fafc" />
-      <circle cx="40" cy="40" r="33" stroke="#0f3460" strokeWidth="0.8" strokeDasharray="3 2" fill="none" />
-      <rect x="16" y="57" width="48" height="5" rx="1" fill="#0f3460" />
-      <rect x="22" y="38" width="7" height="19" rx="1" fill="#1b3f73" />
-      <rect x="36.5" y="32" width="7" height="25" rx="1" fill="#0f3460" />
-      <rect x="51" y="38" width="7" height="19" rx="1" fill="#1b3f73" />
-      <rect x="20" y="35" width="11" height="4" rx="1" fill="#0f3460" />
-      <rect x="34.5" y="29" width="11" height="4" rx="1" fill="#0f3460" />
-      <rect x="49" y="35" width="11" height="4" rx="1" fill="#0f3460" />
-      <path d="M14 35 L40 18 L66 35Z" fill="none" stroke="#0f3460" strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx="40" cy="26" r="5" stroke="#FF9933" strokeWidth="1.2" fill="none" />
-      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
-        const rad = (deg * Math.PI) / 180;
-        return (
-          <line
-            key={deg}
-            x1={40 + 2.2 * Math.cos(rad)}
-            y1={26 + 2.2 * Math.sin(rad)}
-            x2={40 + 4.5 * Math.cos(rad)}
-            y2={26 + 4.5 * Math.sin(rad)}
-            stroke="#FF9933"
-            strokeWidth="1"
-          />
-        );
-      })}
-      <circle cx="40" cy="26" r="1.5" fill="#FF9933" />
-      <rect x="16" y="62" width="48" height="10" rx="1" fill="#0f3460" />
-      <text
-        x="40"
-        y="70"
-        textAnchor="middle"
-        fill="#ffffff"
-        fontSize="5.5"
-        fontFamily="Inter, sans-serif"
-        fontWeight="700"
-        letterSpacing="0.5"
-      >
-        EDUCATION · INDIA
-      </text>
-    </svg>
+      className={`object-contain rounded-full bg-white shadow-xs flex-shrink-0 ${className ?? ''}`}
+      style={{ width: size, height: size }}
+    />
   );
 }
 
@@ -241,11 +206,13 @@ export function StatCard({
   value,
   note,
   emptyText,
+  className,
 }: {
   label: string;
   value: string | number | undefined | null;
   note?: string;
   emptyText?: string;
+  className?: string;
 }) {
   const isEmpty =
     value === '—' ||
@@ -254,31 +221,41 @@ export function StatCard({
     value === '';
 
   return (
-    <div className="bg-white border border-[#d1d5db] rounded-sm border-t-[3px] border-t-[#0f3460] px-5 py-4 min-h-[118px] flex flex-col justify-between">
-      <p className="text-[11px] font-semibold text-[#4b6077] uppercase tracking-widest leading-snug">
-        {label}
-      </p>
-      {isEmpty ? (
-        <div className="my-2.5">
-          <p className="text-xs text-[#6b7c93] italic leading-relaxed">
-            {emptyText ?? 'Data will appear once school assessments are verified.'}
-          </p>
-        </div>
-      ) : (
-        /* Serif display face for the hero number — gives stat cards institutional weight */
-        <p
-          className="my-2 tabular-nums leading-none text-[#0f2540]"
-          style={{
-            fontFamily: "'Source Serif 4', Georgia, 'Times New Roman', serif",
-            fontSize: 'clamp(1.75rem, 4vw, 2.25rem)',
-            fontWeight: 700,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {value}
+    <div className={`bg-white border border-[#d1d5db] rounded-sm border-t-[3px] border-t-[#0f3460] px-4 sm:px-5 py-4 min-h-[128px] flex flex-col justify-between h-full ${className ?? ''}`}>
+      <div className="min-h-[2rem] flex items-start">
+        <p className="text-[11px] font-semibold text-[#4b6077] uppercase tracking-wider leading-snug">
+          {label}
         </p>
-      )}
-      {note && <p className="text-[11px] text-[#6b7c93] mt-auto leading-snug">{note}</p>}
+      </div>
+      <div className="my-1.5 flex items-baseline">
+        {isEmpty ? (
+          <div className="py-1">
+            <p className="text-xs text-[#6b7c93] italic leading-relaxed">
+              {emptyText ?? 'Data will appear once school assessments are verified.'}
+            </p>
+          </div>
+        ) : (
+          /* Serif display face for the hero number — gives stat cards institutional weight */
+          <p
+            className="tabular-nums leading-none text-[#0f2540]"
+            style={{
+              fontFamily: "'Source Serif 4', Georgia, 'Times New Roman', serif",
+              fontSize: 'clamp(1.75rem, 3.5vw, 2.25rem)',
+              fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {value}
+          </p>
+        )}
+      </div>
+      <div className="min-h-[2rem] flex items-start">
+        {note ? (
+          <p className="text-[11px] text-[#6b7c93] leading-snug">
+            {note}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

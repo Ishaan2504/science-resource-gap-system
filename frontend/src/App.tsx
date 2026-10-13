@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { apiMode } from './api/client';
 import { useAuth } from './auth/AuthContext';
 import type { Role } from './types';
 import { AppShell } from './components/AppShell';
@@ -31,7 +30,6 @@ function AdminOnly({ children }: { children: React.ReactNode }) {
 
 function RoleOnly({ children, roles }: { children: React.ReactNode; roles: Role[] }) {
   const { user } = useAuth();
-  if (apiMode === 'mock') return <>{children}</>;
   return user && roles.includes(user.role) ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 

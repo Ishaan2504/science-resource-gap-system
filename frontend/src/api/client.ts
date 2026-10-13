@@ -65,14 +65,34 @@ function query(params: Record<string, string | number | undefined>) {
   return search.toString();
 }
 
+const VALID_CREDENTIALS: Record<string, { role: UserSession['role']; password: string; name: string }> = {
+  'admin@example.com': { role: 'ADMIN', password: 'Test123456', name: 'System Administrator' },
+  'ngo@example.com': { role: 'NGO', password: 'Test123456', name: 'NGO Partner Officer' },
+  'school@example.com': { role: 'SCHOOL', password: 'Test123456', name: 'GHSS School Principal' },
+  'coordinator@example.com': { role: 'FIELD_COORDINATOR', password: 'Test123456', name: 'Field Coordinator' },
+  'district.office@gov.example': { role: 'ADMIN', password: 'Demonstration2026', name: 'District Science Officer' },
+  'program@science-foundation.example': { role: 'NGO', password: 'Demonstration2026', name: 'Science Foundation Officer' },
+  'school.kolar@gov.example': { role: 'SCHOOL', password: 'Demonstration2026', name: 'GHSS Kolar School Official' },
+  'coordinator.kolar@gov.example': { role: 'FIELD_COORDINATOR', password: 'Demonstration2026', name: 'Kolar Field Coordinator' },
+};
+
 export const api = {
   auth: {
     async login(email: string, password: string, demoRole: UserSession['role']): Promise<UserSession> {
       if (apiMode === 'mock') {
         await new Promise((resolve) => window.setTimeout(resolve, 220));
-        const pair: TokenPair = { access_token: 'mock-access-token', refresh_token: 'mock-refresh-token', role: demoRole };
+        const normalizedEmail = email.trim().toLowerCase();
+        const account = VALID_CREDENTIALS[normalizedEmail];
+        if (!account || account.password !== password) {
+          throw new ApiError('Invalid email or password. Please verify your credentials.', 401, 'INVALID_CREDENTIALS');
+        }
+        if (demoRole && account.role !== demoRole) {
+          throw new ApiError(`These credentials belong to the ${account.role} role. Please select ${account.role} as your role.`, 403, 'ROLE_MISMATCH');
+        }
+        const assignedRole = account.role;
+        const pair: TokenPair = { access_token: 'mock-access-token', refresh_token: 'mock-refresh-token', role: assignedRole };
         storeTokens(pair);
-        const user = { user_id: `demo-${demoRole.toLowerCase()}`, role: demoRole, full_name: email.split('@')[0].replace(/[._-]/g, ' ') || 'Demonstration user', email };
+        const user = { user_id: `usr-${assignedRole.toLowerCase()}`, role: assignedRole, full_name: account.name, email: normalizedEmail };
         localStorage.setItem('srg_user', JSON.stringify(user));
         return user;
       }

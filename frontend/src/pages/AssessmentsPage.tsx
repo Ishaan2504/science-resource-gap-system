@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, apiMode } from '../api/client';
 import { mockSchools } from '../api/mock';
 import { useAuth } from '../auth/AuthContext';
@@ -77,9 +77,13 @@ export function AssessmentsPage() {
     <>
       <GovPageHeader
         title="Science Resource Assessments"
-        description="Review lab infrastructure snapshots, track verification lifecycle, and record new field assessments."
+        description={
+          user?.role === 'ADMIN'
+            ? 'Review lab infrastructure snapshots and verification status for all past institution assessments.'
+            : 'Review lab infrastructure snapshots, track verification lifecycle, and record new field assessments.'
+        }
         actions={
-          user?.role === 'SCHOOL' || user?.role === 'FIELD_COORDINATOR' || apiMode === 'mock' ? (
+          user?.role !== 'ADMIN' && (user?.role === 'SCHOOL' || user?.role === 'FIELD_COORDINATOR') ? (
             <GovButton
               variant="primary"
               onClick={() => navigate(`/assessments/new?school=${schoolId}`)}
@@ -260,8 +264,13 @@ const emptyEntry = (): Entry => ({
 });
 
 export function AssessmentFormPage() {
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+
+  if (user?.role === 'ADMIN') {
+    return <Navigate to="/assessments" replace />;
+  }
   const [schoolId, setSchoolId] = useState(params.get('school') ?? 'sch-001');
   const [categoryId, setCategoryId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));

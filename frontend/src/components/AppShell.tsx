@@ -35,9 +35,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useAppContext } from '../context/AppContext';
-import { apiMode } from '../api/client';
 import type { Role } from '../types';
-import { GovAlert, GovButton, MinistryEmblem, TricolorRule } from './GovUI';
+import { GovButton, MinistryEmblem, TricolorRule } from './GovUI';
 
 const roleLabels: Record<Role, { en: string; hi: string }> = {
   SCHOOL: { en: 'School Official', hi: 'विद्यालय अधिकारी' },
@@ -143,7 +142,7 @@ function useISTClock() {
 }
 
 export function AppShell() {
-  const { user, signOut, switchRole } = useAuth();
+  const { user, signOut } = useAuth();
   const { lang, setLang, decreaseFont, resetFont, increaseFont, atMinFont, atMaxFont } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
@@ -291,17 +290,6 @@ export function AppShell() {
             </div>
           </div>
 
-          {/* Center portal title badge */}
-          <div className="hidden md:block flex-shrink-0 text-center px-3 py-1 border-x border-[#e5e7eb]">
-            <p className="text-[10px] uppercase tracking-widest text-[#6b7c93] font-semibold">
-              ISRGAPIT System
-            </p>
-            <p className="text-[11px] font-semibold text-[#0f3460] truncate max-w-[280px]">
-              {lang === 'hi'
-                ? 'विज्ञान संसाधन अंतराल प्रणाली'
-                : 'Science Resource Gap Portal'}
-            </p>
-          </div>
 
           {/* Account info + Sign out button */}
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -352,51 +340,20 @@ export function AppShell() {
           </nav>
           {user && (
             <div className="flex items-center gap-3">
-              {apiMode === 'mock' && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold text-[#8a5300] uppercase tracking-wider hidden sm:inline">
-                    {lang === 'hi' ? 'भूमिका बदलें:' : 'Switch Role:'}
-                  </span>
-                  <select
-                    aria-label="Demo role switcher"
-                    value={user.role}
-                    onChange={(e) => switchRole(e.target.value as Role)}
-                    className="h-6 text-[11px] font-semibold bg-white border border-[#b45309] text-[#0f3460] rounded-sm px-1.5 py-0 focus:outline-none focus:ring-1 focus:ring-[#0f3460] cursor-pointer"
-                  >
-                    <option value="ADMIN">ADMIN — District Officer</option>
-                    <option value="SCHOOL">SCHOOL — School Principal</option>
-                    <option value="NGO">NGO — Partner Organisation</option>
-                    <option value="FIELD_COORDINATOR">FIELD COORDINATOR — Inspector</option>
-                  </select>
-                </div>
-              )}
-              <span className="hidden md:inline-block text-[11px] text-[#6b7c93]">
-                {lang === 'hi' ? 'अधिकृत पोर्टल सत्र' : 'Authorised Portal Session'}
+              <span className="text-[11px] text-[#6b7c93] flex items-center gap-2">
+                <span className="font-semibold text-[#0f3460] bg-white border border-[#d1d5db] px-2 py-0.5 rounded-xs">
+                  {roleLabels[user.role][lang]}
+                </span>
+                <span className="hidden sm:inline border-l border-[#d1d5db] pl-2">
+                  {lang === 'hi' ? 'अधिकृत पोर्टल सत्र' : 'Authorised Portal Session'}
+                </span>
               </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* ================================================================
-          5. DEMONSTRATION MODE BANNER (Bordered, amber/caution alert)
-      ================================================================ */}
-      {apiMode === 'mock' && user && (
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 pt-4">
-          <GovAlert tone="demo">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <span>
-                {lang === 'hi'
-                  ? 'प्रदर्शन डेटा सक्षम है — परिवर्तन केवल स्थानीय सत्र में हैं और बैकएंड पर सहेजे नहीं जाते हैं।'
-                  : 'Demonstration data is enabled. Changes are local to this session and not saved to the backend.'}
-              </span>
-              <span className="text-[11px] font-medium text-[#7c2d12]">
-                Active workspace: <strong className="font-bold underline">{user.role}</strong>
-              </span>
-            </div>
-          </GovAlert>
-        </div>
-      )}
+
 
       {/* ================================================================
           6. BODY ROW — Left Sidebar + Main Content Slot
