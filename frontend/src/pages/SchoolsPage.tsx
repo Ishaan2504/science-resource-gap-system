@@ -375,9 +375,12 @@ export function SchoolFormPage() {
       address: address || undefined,
     };
     try {
-      if (editing) await api.schools.update(id!, payload);
-      else await api.schools.create(payload);
-      navigate('/schools');
+      const result = editing 
+        ? await api.schools.update(id!, payload)
+        : await api.schools.create(payload);
+      
+      // Navigate to the school detail page after successful creation/update
+      navigate(`/schools/${result.school_id || id}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The school profile could not be saved.');
     }

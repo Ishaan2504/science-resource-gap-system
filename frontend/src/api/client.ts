@@ -110,13 +110,13 @@ export const api = {
   schools: {
     list(params: { page: number; page_size: number; search?: string; district?: string; verification_status?: string }): Promise<Page<School>> {
       if (apiMode === 'mock') return mockApi.schools(params);
-      throw new ApiError('The backend does not expose a school collection endpoint yet.', 501, 'ENDPOINT_NOT_AVAILABLE');
+      return request<Page<School>>(`/schools?${query(params)}`);
     },
     detail(id: string): Promise<School> { return apiMode === 'mock' ? mockApi.school(id) : request<School>(`/schools/${id}`); },
     create(payload: Record<string, unknown>): Promise<School> { return apiMode === 'mock' ? mockApi.createSchool(payload) : request<School>('/schools', { method: 'POST', body: JSON.stringify(payload) }); },
     update(id: string, payload: Record<string, unknown>): Promise<School> {
       if (apiMode === 'mock') return mockApi.updateSchool(id, payload);
-      return Promise.reject(new ApiError('The backend does not expose a school edit endpoint yet.', 501, 'ENDPOINT_NOT_AVAILABLE'));
+      return request<School>(`/schools/${id}/verify`, { method: 'PATCH', body: JSON.stringify(payload) });
     },
   },
   requirements: {
