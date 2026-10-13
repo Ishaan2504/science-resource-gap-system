@@ -11,7 +11,42 @@ schoolRouter.use(authenticate);
 
 const schoolInput = z.object({ school_name:z.string().min(1).max(255),udise_code:z.string().regex(/^\d{11}$/).optional(),school_type:z.enum(['GOVERNMENT','AIDED','PRIVATE']),district:z.string().min(1).max(100),state:z.string().min(1).max(100),address:z.string().optional(),latitude:z.number().min(-90).max(90).optional(),longitude:z.number().min(-180).max(180).optional(),student_strength_total:z.number().int().nonnegative(),contact_person:z.string().max(150).optional(),contact_phone:z.string().regex(/^\+[1-9]\d{1,14}$/).optional() }).refine(v => (v.latitude === undefined) === (v.longitude === undefined),{message:'Latitude and longitude must be provided together.'});
 
-schoolRouter.post('/schools',allow('SCHOOL'),async(req,res,next)=>{
+schoolRouter.get('/schools',async(req,res,next)=>{
+  try {
+    const {page,pageSize,offset}=pagination(req);
+    const search=req.query.search?String(req.query.search):'';
+    const district=req.query.district?String(req.query.district):undefined;
+    const verification_status=req.query.verification_status?String(req.query.verification_status):undefined;
+    
+    let whereClause='WHERE 1=1';
+    const params:any[]=[pageSize,offset];
+    let paramIndex=3;
+    
+    if(search){
+      whereClause+=` AND (school_name ILIKE $${paramIndex} OR udise_code ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    if(district){
+      whereClause+=` AND district=$${paramIndex}`;
+      params.push(district);
+      paramIndex++;
+    }
+    if(verification_status){
+      whereClause+=` AND verification_status=$${paramIndex}`;
+      params.push(verification_status);
+      paramIndex++;
+    }
+    
+    const [list,count]=await Promise.all([
+      pool.query(`SELECT * FROM schools ${whereClause} ORDER BY created_at DESC LIMIT $1 OFFSET $2`,params),
+      pool.query(`SELECT count(*) FROM schools ${whereClause}`,params.slice(2))
+    ]);
+    res.json(paged(list.rows,page,pageSize,count.rows[0].count));
+  }catch(e){next(e);}
+});
+
+schoolRouter.post('/schools',allow('SCHOOL','ADMIN'),async(req,res,next)=>{
   try {
     const p=schoolInput.parse(req.body);
     const row=await inTransaction(async(c)=>{const r=await c.query(`INSERT INTO schools(user_id,school_name,udise_code,school_type,district,state,address,latitude,longitude,student_strength_total,contact_person,contact_phone)
