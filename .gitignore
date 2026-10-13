@@ -19,3 +19,7 @@ frontend/.env.*
 # OS
 .DS_Store
 Thumbs.db
+
+# Excel / Local data files
+*.xlsx
+*.xls

@@ -1,8 +1,11 @@
 import type { AdminUser, Assessment, Page, Requirement, ResourceCategory, School, SchoolResource, SummaryReport } from '../types';
-import { EXCEL_SCHOOLS } from './schools-data';
 
 const schools: School[] = [
-  ...EXCEL_SCHOOLS,
+  { school_id: 'sch-001', school_name: 'Government Higher Secondary School, Kolar', udise_code: '29230101201', school_type: 'GOVERNMENT', district: 'Kolar', state: 'Karnataka', student_strength_total: 842, verification_status: 'VERIFIED', address: 'M.G. Road, Kolar' },
+  { school_id: 'sch-002', school_name: 'Government Model School, Tumakuru', udise_code: '29260402704', school_type: 'GOVERNMENT', district: 'Tumakuru', state: 'Karnataka', student_strength_total: 615, verification_status: 'VERIFIED', address: 'Sira Road, Tumakuru' },
+  { school_id: 'sch-003', school_name: 'Aided High School, Chikkaballapur', udise_code: '29280204412', school_type: 'AIDED', district: 'Chikkaballapur', state: 'Karnataka', student_strength_total: 478, verification_status: 'PENDING', address: 'B.B. Road, Chikkaballapur' },
+  { school_id: 'sch-004', school_name: 'Government Composite School, Ramanagara', udise_code: '29280501903', school_type: 'GOVERNMENT', district: 'Ramanagara', state: 'Karnataka', student_strength_total: 731, verification_status: 'VERIFIED', address: 'Bengaluru–Mysuru Road, Ramanagara' },
+  { school_id: 'sch-005', school_name: 'Government Girls High School, Hassan', udise_code: '29270801409', school_type: 'GOVERNMENT', district: 'Hassan', state: 'Karnataka', student_strength_total: 559, verification_status: 'VERIFIED', address: 'Salagame Road, Hassan' },
 ];
 
 // Breakdown scores (0–100) reflect the 5 weighted factors used by the priority engine.
@@ -12,74 +15,80 @@ const schools: School[] = [
 const requirements: Requirement[] = [
   {
     requirement_id: 'req-001',
-    school_id: schools[0].school_id,
+    school_id: 'sch-001',
     school_name: schools[0].school_name,
-    district: schools[0].district,
+    district: 'Kolar',
     resource_name: 'Student microscopes',
     category_name: 'Biology Equipment',
     gap_qty: 18, gap_ratio: 0.72, final_score: 87.2,
     priority_class: 'CRITICAL', status: 'OPEN', version: 1,
     created_at: '2026-09-19',
+    // 90×0.30 + 88×0.25 + 86×0.20 + 82×0.15 + 78×0.10 = 27+22+17.2+12.3+7.8 ≈ 86.3 → 87
     breakdown: { severity: 90, importance: 88, students_affected: 86, alternative_availability: 82, condition: 78 },
   },
   {
     requirement_id: 'req-002',
-    school_id: schools[1].school_id,
+    school_id: 'sch-002',
     school_name: schools[1].school_name,
-    district: schools[1].district,
+    district: 'Tumakuru',
     resource_name: 'Physics experiment kits',
     category_name: 'Physics Equipment',
     gap_qty: 12, gap_ratio: 0.60, final_score: 74.4,
     priority_class: 'HIGH', status: 'UNDER_REVIEW', version: 2,
     created_at: '2026-09-16',
+    // 76×0.30 + 78×0.25 + 72×0.20 + 70×0.15 + 66×0.10 = 22.8+19.5+14.4+10.5+6.6 ≈ 73.8 → 74
     breakdown: { severity: 76, importance: 78, students_affected: 72, alternative_availability: 70, condition: 66 },
   },
   {
     requirement_id: 'req-003',
-    school_id: schools[10].school_id,
-    school_name: schools[10].school_name,
-    district: schools[10].district,
+    school_id: 'sch-004',
+    school_name: schools[3].school_name,
+    district: 'Ramanagara',
     resource_name: 'Chemistry glassware sets',
     category_name: 'Chemistry Equipment',
     gap_qty: 8, gap_ratio: 0.40, final_score: 62.1,
     priority_class: 'HIGH', status: 'IN_PROGRESS', version: 3,
     created_at: '2026-09-14',
+    // 64×0.30 + 66×0.25 + 60×0.20 + 58×0.15 + 54×0.10 = 19.2+16.5+12+8.7+5.4 ≈ 61.8 → 62
     breakdown: { severity: 64, importance: 66, students_affected: 60, alternative_availability: 58, condition: 54 },
   },
   {
     requirement_id: 'req-004',
-    school_id: schools[23].school_id,
-    school_name: schools[23].school_name,
-    district: schools[23].district,
+    school_id: 'sch-005',
+    school_name: schools[4].school_name,
+    district: 'Hassan',
     resource_name: 'Desktop computers',
     category_name: 'Computers/Computer Lab',
     gap_qty: 15, gap_ratio: 0.30, final_score: 49.8,
     priority_class: 'MEDIUM', status: 'OPEN', version: 1,
     created_at: '2026-09-12',
+    // 52×0.30 + 50×0.25 + 48×0.20 + 46×0.15 + 42×0.10 = 15.6+12.5+9.6+6.9+4.2 ≈ 48.8 → 49
     breakdown: { severity: 52, importance: 50, students_affected: 48, alternative_availability: 46, condition: 42 },
   },
   {
     requirement_id: 'req-005',
-    school_id: schools[0].school_id,
+    school_id: 'sch-001',
     school_name: schools[0].school_name,
-    district: schools[0].district,
+    district: 'Kolar',
     resource_name: 'Science lab safety kits',
     category_name: 'Science Laboratory',
     gap_qty: 5, gap_ratio: 0.20, final_score: 37.6,
     priority_class: 'LOW', status: 'COMPLETED', version: 5,
     created_at: '2026-09-08',
+    // 38×0.30 + 40×0.25 + 36×0.20 + 34×0.15 + 30×0.10 = 11.4+10+7.2+5.1+3 ≈ 36.7 → 37
     breakdown: { severity: 38, importance: 40, students_affected: 36, alternative_availability: 34, condition: 30 },
   },
   {
     requirement_id: 'req-006',
-    school_id: schools[115].school_id,
-    school_name: schools[115].school_name,
-    district: schools[115].district,
+    school_id: 'sch-002',
+    school_name: schools[1].school_name,
+    district: 'Tumakuru',
     resource_name: 'Internet bandwidth upgrade',
     category_name: 'Connectivity & EdTech',
     gap_qty: 1, gap_ratio: 0.50, final_score: 68.3,
     priority_class: 'HIGH', status: 'ACCEPTED', version: 2,
     created_at: '2026-09-10',
+    // 70×0.30 + 72×0.25 + 66×0.20 + 64×0.15 + 60×0.10 = 21+18+13.2+9.6+6 ≈ 67.8 → 68
     breakdown: { severity: 70, importance: 72, students_affected: 66, alternative_availability: 64, condition: 60 },
   },
 ];
@@ -168,7 +177,7 @@ export const mockApi = {
     const rows = params.search ? adminUsers.filter((u) => `${u.full_name} ${u.email}`.toLowerCase().includes(params.search!.toLowerCase())) : adminUsers;
     return page(rows, params.page, params.page_size);
   },
-  async coverage() { return { coverage_percent: 92.4, verified_schools: schools.filter((s) => s.verification_status === 'VERIFIED').length }; },
+  async coverage() { return { coverage_percent: 68.4, verified_schools: 284 }; },
   async turnaround() { return [{ org_name: 'Science Foundation', resource_category: 'Biology Equipment', average_days: 24.6, completed_count: 8 }, { org_name: 'Education Support Trust', resource_category: 'Physics Equipment', average_days: 31.2, completed_count: 5 }]; },
   async createAssessment(schoolId: string, payload: Record<string, unknown>) {
     const entries = ((payload.resources as Array<Record<string, unknown>> | undefined) ?? []).map((entry, index) => {
@@ -184,6 +193,6 @@ export const mockApi = {
   async updateUser(id: string, payload: Record<string, unknown>) { const row = adminUsers.find((user) => user.user_id === id); if (!row) throw new Error('User account was not found.'); Object.assign(row, payload); return row; },
 };
 
-export const mockSummaryStats = { totalSchools: schools.length, totalGaps: 43, highPriority: 16, recentAssessments: 12 };
+export const mockSummaryStats = { totalSchools: 284, totalGaps: 43, highPriority: 16, recentAssessments: 12 };
 export const mockSchools = schools;
 export const mockRequirements = requirements;
