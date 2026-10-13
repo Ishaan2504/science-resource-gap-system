@@ -685,26 +685,51 @@ function AdminDashboard({
 }) {
   const navigate = useNavigate();
 
-  const statusCounts = [
-    { name: 'OPEN', label: 'Open', count: requirements.filter((r) => r.status === 'OPEN').length || 21 },
-    { name: 'UNDER_REVIEW', label: 'Under Review', count: requirements.filter((r) => r.status === 'UNDER_REVIEW').length || 7 },
-    { name: 'ACCEPTED', label: 'Accepted', count: requirements.filter((r) => r.status === 'ACCEPTED').length || 5 },
-    { name: 'IN_PROGRESS', label: 'In Progress', count: requirements.filter((r) => r.status === 'IN_PROGRESS').length || 8 },
-    { name: 'COMPLETED', label: 'Completed', count: requirements.filter((r) => r.status === 'COMPLETED').length || 11 },
-    { name: 'CLOSED', label: 'Closed', count: requirements.filter((r) => r.status === 'CLOSED').length || 16 },
+  // Fetch real summary data from API
+  const summaryQuery = useAsync(() => api.reports.summary());
+  const coverageQuery = useAsync(() => api.reports.coverage());
+
+  const summary = summaryQuery.data;
+  const coverage = coverageQuery.data;
+
+  // Calculate status counts from real data
+  const statusCounts = summary?.status_funnel || [
+    { status: 'OPEN', count: requirements.filter((r) => r.status === 'OPEN').length },
+    { status: 'UNDER_REVIEW', count: requirements.filter((r) => r.status === 'UNDER_REVIEW').length },
+    { status: 'ACCEPTED', count: requirements.filter((r) => r.status === 'ACCEPTED').length },
+    { status: 'IN_PROGRESS', count: requirements.filter((r) => r.status === 'IN_PROGRESS').length },
+    { status: 'COMPLETED', count: requirements.filter((r) => r.status === 'COMPLETED').length },
+    { status: 'CLOSED', count: requirements.filter((r) => r.status === 'CLOSED').length },
   ];
 
-  const pipeline = [
-    { label: 'Draft', count: 14, tone: 'secondary' as const },
-    { label: 'Submitted / Awaiting Inspection', count: 7, tone: 'high' as const },
-    { label: 'Verified', count: 284, tone: 'low' as const },
-    { label: 'Rejected / Needs Revision', count: 3, tone: 'critical' as const },
-  ];
+  // Status labels for display
+  const statusLabels: Record<string, string> = {
+    'OPEN': 'Open',
+    'UNDER_REVIEW': 'Under Review',
+    'ACCEPTED': 'Accepted',
+    'IN_PROGRESS': 'In Progress',
+    'COMPLETED': 'Completed',
+    'CLOSED': 'Closed',
+    'PARTIALLY_COMPLETED': 'Partially Completed',
+    'NOT_FEASIBLE': 'Not Feasible',
+    'DISPUTED': 'Disputed'
+  };
 
-  const openCount = requirements.filter((r) => !['COMPLETED', 'CLOSED'].includes(r.status)).length || 43;
+  const statusChartData = statusCounts.map(s => ({
+    name: s.status,
+    label: statusLabels[s.status] || s.status,
+    count: s.count
+  }));
+
+  // School verification pipeline
+  const verifiedCount = schools.filter(s => s.verification_status === 'VERIFIED').length;
+  const pendingCount = schools.filter(s => s.verification_status === 'PENDING').length;
+  const rejectedCount = schools.filter(s => s.verification_status === 'REJECTED').length;
+
+  const openCount = requirements.filter((r) => !['COMPLETED', 'CLOSED'].includes(r.status)).length;
   const criticalCount = requirements.filter(
     (r) => r.priority_class === 'CRITICAL' && !['COMPLETED', 'CLOSED'].includes(r.status),
-  ).length || 4;
+  ).length;
 
   return (
     <>
@@ -727,13 +752,13 @@ function AdminDashboard({
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-5">
         <StatCard
           label="Registered schools"
-          value={schools.length || mockSummaryStats.totalSchools}
-          note="100% geo-tagged profiles"
+          value={schools.length}
+          note="All schools in system"
         />
         <StatCard
           label="Awaiting verification"
-          value={7}
-          note="Submitted lab assessments"
+          value={pendingCount}
+          note="Pending verification"
         />
         <StatCard
           label="Open resource gaps"
@@ -742,13 +767,13 @@ function AdminDashboard({
         />
         <StatCard
           label="Critical / high deficits"
-          value={criticalCount + 12}
-          note="Prioritization score 70+"
+          value={criticalCount + requirements.filter(r => r.priority_class === 'HIGH' && !['COMPLETED', 'CLOSED'].includes(r.status)).length}
+          note="Prioritization score 60+"
         />
         <StatCard
-          label="Intervention turnaround"
-          value="24.6 days"
-          note="78% completion rate"
+          label="Coverage rate"
+          value={coverage ? `${coverage.coverage_percent}%` : 'Loading...'}
+          note={coverage ? `${coverage.verified_schools} verified schools` : ''}
         />
       </div>
 
@@ -758,8 +783,8 @@ function AdminDashboard({
         <div className="xl:col-span-2">
           <BarChartCard
             label="Requirement status distribution"
-            takeaway="Most open requirements are awaiting NGO acceptance — 21 still unassigned state-wide."
-            data={statusCounts}
+            takeaway={`${openCount} requirements are open or in progress across the state.`}
+            data={statusChartData}
             categoryKey="label"
             series={[{ dataKey: 'count', name: 'Requirements', color: CHART_COLORS.primary }]}
             layout="horizontal"
@@ -770,15 +795,15 @@ function AdminDashboard({
         {/* School verification status — donut */}
         <DonutChartCard
           label="Schools by verification status"
-          takeaway="92% of registered schools have verified assessment data on file."
+          takeaway={`${verifiedCount} of ${schools.length} registered schools have been verified.`}
           data={[
-            { name: 'Verified',  value: schools.filter(s => s.verification_status === 'VERIFIED').length  || 284, color: CHART_COLORS.verified  },
-            { name: 'Pending',   value: schools.filter(s => s.verification_status === 'PENDING').length   || 18,  color: CHART_COLORS.pending   },
-            { name: 'Rejected',  value: schools.filter(s => s.verification_status === 'REJECTED').length  || 3,   color: CHART_COLORS.rejected  },
-          ]}
+            { name: 'Verified', value: verifiedCount, color: CHART_COLORS.verified },
+            { name: 'Pending', value: pendingCount, color: CHART_COLORS.pending },
+            { name: 'Rejected', value: rejectedCount, color: CHART_COLORS.rejected },
+          ].filter(d => d.value > 0)}
           height={268}
           centerLabel="schools"
-          centerValue={schools.length || 305}
+          centerValue={schools.length}
         />
       </div>
 
@@ -813,15 +838,29 @@ function AdminDashboard({
           />
           <CardBody>
             <div className="space-y-3.5">
-              {pipeline.map((item) => (
-                <div key={item.label} className="space-y-1">
-                  <div className="flex justify-between items-baseline text-xs">
-                    <span className="font-medium text-[#0f2540]">{item.label}</span>
-                    <span className="font-bold text-[#0f3460] tabular-nums">{item.count}</span>
-                  </div>
-                  <GovProgress value={(item.count / 308) * 100} tone={item.tone} />
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="font-medium text-[#0f2540]">Verified</span>
+                  <span className="font-bold text-[#0f3460] tabular-nums">{verifiedCount}</span>
                 </div>
-              ))}
+                <GovProgress value={schools.length ? (verifiedCount / schools.length) * 100 : 0} tone="low" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="font-medium text-[#0f2540]">Pending Verification</span>
+                  <span className="font-bold text-[#0f3460] tabular-nums">{pendingCount}</span>
+                </div>
+                <GovProgress value={schools.length ? (pendingCount / schools.length) * 100 : 0} tone="high" />
+              </div>
+              {rejectedCount > 0 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between items-baseline text-xs">
+                    <span className="font-medium text-[#0f2540]">Rejected / Needs Revision</span>
+                    <span className="font-bold text-[#0f3460] tabular-nums">{rejectedCount}</span>
+                  </div>
+                  <GovProgress value={schools.length ? (rejectedCount / schools.length) * 100 : 0} tone="critical" />
+                </div>
+              )}
             </div>
             <div className="mt-4 pt-3 border-t border-[#e5e7eb]">
               <button
