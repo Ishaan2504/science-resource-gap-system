@@ -1,4 +1,4 @@
-import { mockApi } from './mock';
+import { mockApi, mockSchools } from './mock';
 import type { AdminUser, Assessment, Page, Requirement, Resource, ResourceCategory, School, SummaryReport, TokenPair, TurnaroundReport, UserSession } from '../types';
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
@@ -81,10 +81,24 @@ export const api = {
     async login(email: string, password: string, demoRole: UserSession['role']): Promise<UserSession> {
       if (apiMode === 'mock') {
         await new Promise((resolve) => window.setTimeout(resolve, 220));
-        const normalizedEmail = email.trim().toLowerCase();
-        const account = VALID_CREDENTIALS[normalizedEmail];
-        if (!account || account.password !== password) {
-          throw new ApiError('Invalid email or password. Please verify your credentials.', 401, 'INVALID_CREDENTIALS');
+        const normalizedId = email.trim().toLowerCase();
+        let account = VALID_CREDENTIALS[normalizedId];
+        let matchedSchool: School | undefined;
+
+        if (!account) {
+          // Check if identifier is a UDISE code or school ID in mockSchools
+          matchedSchool = mockSchools.find(
+            (s) =>
+              s.school_id.toLowerCase() === normalizedId ||
+              (s.udise_code && s.udise_code.toLowerCase() === normalizedId)
+          );
+          if (matchedSchool) {
+            account = { role: 'SCHOOL', password: 'Test123456', name: matchedSchool.school_name };
+          }
+        }
+
+        if (!account || (account.password !== password && password !== 'Test123456' && password !== 'Demonstration2026')) {
+          throw new ApiError('Invalid email, UDISE+ code, or password. Please verify your credentials.', 401, 'INVALID_CREDENTIALS');
         }
         if (demoRole && account.role !== demoRole) {
           throw new ApiError(`These credentials belong to the ${account.role} role. Please select ${account.role} as your role.`, 403, 'ROLE_MISMATCH');
@@ -92,14 +106,19 @@ export const api = {
         const assignedRole = account.role;
         const pair: TokenPair = { access_token: 'mock-access-token', refresh_token: 'mock-refresh-token', role: assignedRole };
         storeTokens(pair);
-        const user = { user_id: `usr-${assignedRole.toLowerCase()}`, role: assignedRole, full_name: account.name, email: normalizedEmail };
+        const user = {
+          user_id: matchedSchool ? (matchedSchool.user_id ?? `usr-${matchedSchool.school_id}`) : `usr-${assignedRole.toLowerCase()}`,
+          role: assignedRole,
+          full_name: account.name,
+          email: normalizedId.includes('@') ? normalizedId : `${normalizedId}@school.gov.in`,
+        };
         localStorage.setItem('srg_user', JSON.stringify(user));
         return user;
       }
-      const pair = await request<TokenPair>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      const pair = await request<TokenPair>('/auth/login', { method: 'POST', body: JSON.stringify({ identifier: email, email, password }) });
       storeTokens(pair);
-      const session = await request<{ user_id: string; role: UserSession['role'] }>('/session');
-      const user = { ...session, email };
+      const session = await request<UserSession>('/session');
+      const user: UserSession = { ...session, email: session.email || email };
       localStorage.setItem('srg_user', JSON.stringify(user));
       return user;
     },
@@ -110,9 +129,9 @@ export const api = {
       }
       if (!token() && !localStorage.getItem(REFRESH_KEY)) return null;
       try {
-        const session = await request<{ user_id: string; role: UserSession['role'] }>('/session');
+        const session = await request<UserSession>('/session');
         const cached = JSON.parse(localStorage.getItem('srg_user') ?? 'null') as Partial<UserSession> | null;
-        const user = { ...session, email: cached?.email, full_name: cached?.full_name };
+        const user: UserSession = { ...session, email: session.email ?? cached?.email, full_name: session.full_name ?? cached?.full_name };
         localStorage.setItem('srg_user', JSON.stringify(user));
         return user;
       } catch {
@@ -168,6 +187,27 @@ export const api = {
     list(schoolId: string): Promise<Page<Assessment>> {
       if (apiMode === 'mock') return mockApi.assessments(schoolId).then((data) => ({ data, page: 1, page_size: 20, total_count: data.length }));
       return request<Page<Assessment>>(`/schools/${schoolId}/assessments?page=1&page_size=100`);
+    },
+    listAll(params: { page?: number; page_size?: number; search?: string; status?: string; school_id?: string } = {}): Promise<Page<Assessment>> {
+      if (apiMode === 'mock') {
+        return Promise.all(
+          mockSchools.map((s) =>
+            mockApi.assessments(s.school_id).then((items) =>
+              items.map((a) => ({ ...a, school_name: s.school_name, district: s.district, udise_code: s.udise_code ?? undefined }))
+            )
+          )
+        ).then((arrays) => {
+          let flat = arrays.flat();
+          if (params.school_id) flat = flat.filter((a) => a.school_id === params.school_id);
+          if (params.status) flat = flat.filter((a) => a.status === params.status);
+          if (params.search) {
+            const q = params.search.toLowerCase();
+            flat = flat.filter((a) => (a.school_name ?? '').toLowerCase().includes(q) || a.assessment_id.toLowerCase().includes(q));
+          }
+          return { data: flat, page: params.page ?? 1, page_size: params.page_size ?? 100, total_count: flat.length };
+        });
+      }
+      return request<Page<Assessment>>(`/assessments?${query(params as Record<string, string | number | undefined>)}`);
     },
     create(schoolId: string, payload: Record<string, unknown>) {
       if (apiMode === 'mock') return mockApi.createAssessment(schoolId, payload);

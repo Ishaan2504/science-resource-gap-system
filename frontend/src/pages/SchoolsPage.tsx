@@ -4,7 +4,7 @@ import { api, apiMode } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useAsync } from '../hooks/useAsync';
 import { mockSchools } from '../api/mock';
-import type { School } from '../types';
+import type { Requirement, School } from '../types';
 import {
   GovAlert,
   GovBadge,
@@ -44,7 +44,10 @@ export function SchoolsPage() {
 
   let rows = result.data?.data ?? [];
   if (apiMode === 'mock' && user?.role === 'SCHOOL') {
-    rows = rows.filter((r) => r.school_id === 'sch-001');
+    const matched = mockSchools.find((s) => s.user_id === user?.user_id || s.school_name === user?.full_name);
+    if (matched) {
+      rows = rows.filter((r) => r.school_id === matched.school_id);
+    }
   }
   const maharashtraDistricts = ['Nagpur', 'Amravati', 'Bhandara', 'Yavatmal', 'Akola', 'Chandrapur', 'Buldhana', 'Gondia', 'Wardha', 'Washim', 'Gadchiroli'];
   const districts = [...new Set([...maharashtraDistricts, ...mockSchools.map((s) => s.district), ...rows.map((s) => s.district)])].filter(Boolean).sort();
@@ -188,6 +191,11 @@ export function SchoolDetailPage() {
     [id],
   );
 
+  const reqs = useAsync(
+    () => api.requirements.list({ page: 1, page_size: 50, school_id: id }),
+    [id],
+  );
+
   if (school.loading) {
     return <p className="text-sm text-[#6b7c93] py-6 text-center italic">Loading school profile…</p>;
   }
@@ -202,6 +210,10 @@ export function SchoolDetailPage() {
         assessments?: Array<{ assessment_id: string; assessment_date: string; status: string }>;
       } | null
     )?.assessments ?? [];
+  const schoolReqs = reqs.data?.data ?? [];
+  const criticalCount = schoolReqs.filter((r) => r.priority_class === 'CRITICAL').length;
+  const highCount = schoolReqs.filter((r) => r.priority_class === 'HIGH').length;
+  const openCount = schoolReqs.filter((r) => !['COMPLETED', 'CLOSED'].includes(r.status)).length;
 
   return (
     <>
@@ -281,6 +293,111 @@ export function SchoolDetailPage() {
             </div>
           </div>
         </CardBody>
+      </GovCard>
+
+      {/* Science Resource Requirements / Gap Profile Panel */}
+      <GovCard className="mb-5">
+        <CardHeader
+          title="Science resource requirements & identified gaps"
+          subtitle="Official laboratory equipment requirements generated from verified school assessments"
+          actions={
+            <div className="flex items-center gap-3">
+              {openCount > 0 && (
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  {openCount} Active Requirement{openCount > 1 ? 's' : ''}
+                </span>
+              )}
+              {criticalCount > 0 && (
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                  {criticalCount} Critical
+                </span>
+              )}
+              {highCount > 0 && (
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                  {highCount} High Priority
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate('/requirements')}
+                className="text-xs font-semibold text-[#1b3f73] underline underline-offset-2 hover:text-[#0f3460] cursor-pointer"
+              >
+                All requirements →
+              </button>
+            </div>
+          }
+        />
+        <GovTable<Requirement>
+          rows={schoolReqs}
+          rowKey={(r) => r.requirement_id}
+          columns={[
+            {
+              key: 'requirement_id',
+              label: 'Requirement ID',
+              render: (r) => (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/requirements/${r.requirement_id}`)}
+                  className="font-mono text-xs font-bold text-[#1b3f73] underline underline-offset-2 hover:text-[#0f3460] cursor-pointer"
+                >
+                  {r.requirement_id.length > 12 ? `${r.requirement_id.slice(0, 8)}…` : r.requirement_id}
+                </button>
+              ),
+            },
+            {
+              key: 'resource_name',
+              label: 'Resource Name',
+              render: (r) => (
+                <div>
+                  <p className="text-sm font-semibold text-[#0f2540]">{r.resource_name}</p>
+                  <p className="text-xs text-[#6b7c93]">{r.category_name}</p>
+                </div>
+              ),
+            },
+            {
+              key: 'gap_qty',
+              label: 'Deficit Qty',
+              render: (r) => (
+                <span className="tabular-nums font-bold text-[#b91c1c] text-sm">
+                  {r.gap_qty} units
+                </span>
+              ),
+            },
+            {
+              key: 'priority_class',
+              label: 'Priority Tier',
+              render: (r) => <GovBadge value={r.priority_class} type="priority" />,
+            },
+            {
+              key: 'final_score',
+              label: 'Score',
+              render: (r) => (
+                <span className="tabular-nums font-extrabold text-[#0f3460] text-sm">
+                  {Number(r.final_score).toFixed(1)}
+                </span>
+              ),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (r) => <GovBadge value={r.status} />,
+            },
+            {
+              key: 'actions',
+              label: 'Action',
+              render: (r) => (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/requirements/${r.requirement_id}`)}
+                  className="text-xs font-semibold text-[#1b3f73] border border-[#d1d5db] px-2.5 py-1 rounded-sm bg-white hover:bg-[#f8fafc] cursor-pointer"
+                >
+                  View Details ›
+                </button>
+              ),
+            },
+          ]}
+          emptyText="No science resource requirements recorded for this school yet."
+        />
       </GovCard>
 
       {history.error && apiMode === 'live' && (

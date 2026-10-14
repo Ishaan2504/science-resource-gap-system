@@ -55,7 +55,7 @@ export async function importExcelSchools() {
 
     if (nameVal && typeof nameVal === 'string' && nameVal.trim().length > 0) {
       const rawName = nameVal.trim().replace(/\s+/g, ' ');
-      const district = (distVal || currentDistrict || 'Wardha').trim();
+      const district = String(distVal || currentDistrict || 'Wardha').trim();
       const distCode = districtCodes[district] || '2799';
       const numPart = String(idCounter).padStart(5, '0');
       const udise = distCode + '01' + numPart;

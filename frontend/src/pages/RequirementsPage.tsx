@@ -4,6 +4,7 @@ import { ArrowUpDown, Search } from 'lucide-react';
 import { api, apiMode } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useAsync } from '../hooks/useAsync';
+import { mockSchools } from '../api/mock';
 import type { Requirement, RequirementStatus } from '../types';
 import {
   GovAlert,
@@ -114,7 +115,7 @@ export function RequirementsPage() {
     () =>
       api.requirements.list({
         page: 1,
-        page_size: 200, // fetch all, sort/filter client-side for the compact view
+        page_size: 500, // fetch institutional requirements, sort/filter client-side
         priority_class: priority,
         status,
       }),
@@ -124,7 +125,9 @@ export function RequirementsPage() {
   // apply role-based filter
   let rows = result.data?.data ?? [];
   if (apiMode === 'mock' && user?.role === 'SCHOOL') {
-    rows = rows.filter((r) => r.school_id === 'sch-001');
+    const matched = mockSchools.find((s) => s.user_id === user?.user_id || s.school_name === user?.full_name);
+    const targetSchoolId = matched?.school_id ?? 'sch-001';
+    rows = rows.filter((r) => r.school_id === targetSchoolId);
   }
   if (apiMode === 'mock' && user?.role === 'FIELD_COORDINATOR') {
     rows = rows.filter((r) => ['Kolar', 'Tumakuru'].includes(r.district));

@@ -32,11 +32,14 @@ export function allow(...roles: Role[]) {
 export async function canAccessSchool(userId: string, role: Role, schoolId: string) {
   if (role === 'ADMIN') return true;
   if (role === 'SCHOOL') {
-    const r = await pool.query('SELECT 1 FROM schools WHERE school_id=$1 AND user_id=$2', [schoolId, userId]);
+    const r = await pool.query('SELECT 1 FROM schools WHERE (school_id::text=$1 OR udise_code=$1) AND user_id=$2', [schoolId, userId]);
     return !!r.rowCount;
   }
   if (role === 'FIELD_COORDINATOR') {
-    const r = await pool.query('SELECT 1 FROM field_coordinator_schools WHERE school_id=$1 AND coordinator_user_id=$2', [schoolId, userId]);
+    const r = await pool.query(
+      'SELECT 1 FROM field_coordinator_schools fcs JOIN schools s ON s.school_id = fcs.school_id WHERE (s.school_id::text=$1 OR s.udise_code=$1) AND fcs.coordinator_user_id=$2',
+      [schoolId, userId]
+    );
     return !!r.rowCount;
   }
   return false;

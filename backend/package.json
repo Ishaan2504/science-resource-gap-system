@@ -9,6 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "migrate": "tsx src/db/migrate.ts",
     "seed:admin": "tsx src/db/seed-admin.ts",
+    "seed:requirements": "tsx src/db/seed-school-requirements.ts",
+    "populate:school-requirements": "tsx src/db/populate-school-requirements.ts",
     "import:excel": "tsx src/db/import-excel-schools.ts"
   },
   "dependencies": {

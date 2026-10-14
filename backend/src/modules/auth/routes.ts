@@ -37,8 +37,26 @@ authRouter.post('/register', async (req, res, next) => {
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const body = z.object({ email: z.string().email().transform(v => v.trim().toLowerCase()), password: passwordLogin }).parse(req.body);
-    const found = await pool.query('SELECT user_id,email,password_hash,role,is_active FROM users WHERE lower(email)=$1', [body.email]);
+    const body = z.object({
+      email: z.string().optional(),
+      identifier: z.string().optional(),
+      password: passwordLogin,
+    }).transform(v => {
+      const idVal = (v.email || v.identifier || '').trim().toLowerCase();
+      if (!idVal) throw new ApiError(400, 'VALIDATION_ERROR', 'Email, UDISE+ code, or school ID is required.');
+      return { identifier: idVal, password: v.password };
+    }).parse(req.body);
+
+    const found = await pool.query(
+      `SELECT u.user_id, u.email, u.password_hash, u.role, u.is_active
+       FROM users u
+       LEFT JOIN schools s ON s.user_id = u.user_id
+       WHERE lower(u.email) = $1
+          OR lower(coalesce(s.udise_code, '')) = $1
+          OR s.school_id::text = $1
+       LIMIT 1`,
+      [body.identifier]
+    );
     if (!found.rowCount || !(await bcrypt.compare(body.password, found.rows[0].password_hash))) throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
     const user = found.rows[0];
     if (!user.is_active) throw new ApiError(403, 'INACTIVE_ACCOUNT', 'Account is inactive.');

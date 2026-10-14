@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -16,7 +16,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useAsync } from '../hooks/useAsync';
 import { mockSchools } from '../api/mock';
-import type { Requirement, School } from '../types';
+import type { Requirement, School, UserSession } from '../types';
 import {
   ActivityTimeline,
   CardBody,
@@ -115,6 +115,7 @@ export function DashboardPage() {
       {/* Render role-specific workspace */}
       {user?.role === 'SCHOOL' && (
         <SchoolDashboard
+          user={user}
           schools={allSchools}
           requirements={allReqs}
           onSelectReq={setSelectedReq}
@@ -184,43 +185,69 @@ export function DashboardPage() {
    1. SCHOOL DASHBOARD WORKSPACE
    =========================================================================== */
 function SchoolDashboard({
+  user,
   schools,
   requirements,
   onSelectReq,
 }: {
+  user: UserSession | null;
   schools: School[];
   requirements: Requirement[];
   onSelectReq: (r: Requirement) => void;
 }) {
   const navigate = useNavigate();
-  const school = schools.find((s) => s.school_id === 'sch-001') ?? schools[0] ?? {
-    school_id: 'sch-001',
-    school_name: 'Government Higher Secondary School, Kolar',
-    udise_code: '29230101201',
-    district: 'Kolar',
-    state: 'Karnataka',
-    student_strength_total: 842,
-  };
+  const school =
+    schools.find((s) => user?.user_id && s.user_id === user.user_id) ??
+    schools.find((s) => user?.email && s.user_id === user.user_id) ??
+    schools.find((s) => user?.full_name && s.school_name.toLowerCase().includes(user.full_name.toLowerCase())) ??
+    schools.find((s) => s.school_id === 'sch-001') ??
+    schools[0] ?? {
+      school_id: 'sch-001',
+      school_name: 'Government Higher Secondary School, Kolar',
+      udise_code: '29230101201',
+      district: 'Kolar',
+      state: 'Karnataka',
+      student_strength_total: 842,
+    };
 
   const schoolReqs = requirements.filter(
     (r) => r.school_id === school.school_id || r.school_name === school.school_name,
   );
   const openReqs = schoolReqs.filter((r) => !['COMPLETED', 'CLOSED'].includes(r.status));
+  const avgScore = schoolReqs.length
+    ? (schoolReqs.reduce((acc, cur) => acc + Number(cur.final_score), 0) / schoolReqs.length).toFixed(1)
+    : '72.4';
 
-  // Category breakdown for this school
-  const categories = [
-    { name: 'Biology Equipment', gap: 72, note: '18 student microscopes deficit' },
-    { name: 'Physics Equipment', gap: 60, note: '12 demonstration kits deficit' },
-    { name: 'Chemistry Equipment', gap: 40, note: '8 glassware sets deficit' },
-    { name: 'Computers & EdTech', gap: 30, note: '15 lab workstations deficit' },
-    { name: 'Science Laboratory Safety', gap: 20, note: '5 emergency eye-wash sets' },
-  ];
+  // Dynamic category breakdown for this school
+  const categories = useMemo(() => {
+    const map = new Map<string, { totalGap: number; count: number; topResource: string }>();
+    for (const r of schoolReqs) {
+      const cur = map.get(r.category_name) ?? { totalGap: 0, count: 0, topResource: r.resource_name };
+      cur.totalGap += r.gap_qty;
+      cur.count += 1;
+      map.set(r.category_name, cur);
+    }
+    if (map.size > 0) {
+      return Array.from(map.entries()).map(([name, data]) => ({
+        name,
+        gap: Math.min(95, Math.max(20, Math.round(data.totalGap * 2.8))),
+        note: `${data.totalGap} units deficit (${data.topResource})`,
+      }));
+    }
+    return [
+      { name: 'Biology Equipment', gap: 72, note: '18 student microscopes deficit' },
+      { name: 'Physics Equipment', gap: 60, note: '12 demonstration kits deficit' },
+      { name: 'Chemistry Equipment', gap: 40, note: '8 glassware sets deficit' },
+      { name: 'Computers & EdTech', gap: 30, note: '15 lab workstations deficit' },
+      { name: 'Science Laboratory Safety', gap: 20, note: '5 emergency eye-wash sets' },
+    ];
+  }, [schoolReqs]);
 
   return (
     <>
       <GovPageHeader
         title={school.school_name}
-        description={`UDISE: ${school.udise_code || '29230101201'} · ${school.district}, ${school.state} · Category: Higher Secondary School`}
+        description={`UDISE: ${school.udise_code || '29230101201'} · ${school.district}, ${school.state} · Category: ${school.school_type ? `${school.school_type} School` : 'Secondary School'}`}
         actions={
           <div className="flex items-center gap-2">
             <GovButton variant="secondary" onClick={() => navigate('/gap-analysis')}>
@@ -260,12 +287,12 @@ function SchoolDashboard({
         />
         <StatCard
           label="Composite school gap score"
-          value="72.4 / 100"
-          note="Deficit Severity: High Urgency"
+          value={`${avgScore} / 100`}
+          note={`Deficit Severity: ${Number(avgScore) >= 80 ? 'Critical Urgency' : Number(avgScore) >= 60 ? 'High Urgency' : 'Moderate'}`}
         />
         <StatCard
           label="Open resource requirements"
-          value={openReqs.length || 2}
+          value={openReqs.length}
           note="Active gaps awaiting or undergoing intervention"
         />
         <StatCard

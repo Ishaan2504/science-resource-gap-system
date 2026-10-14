@@ -7,6 +7,10 @@ export interface UserSession {
   role: Role;
   full_name?: string;
   email?: string;
+  school_id?: string;
+  school_name?: string;
+  udise_code?: string;
+  district?: string;
 }
 
 export interface TokenPair {
@@ -99,6 +103,9 @@ export interface SchoolResource {
 export interface Assessment {
   assessment_id: string;
   school_id: string;
+  school_name?: string;
+  district?: string;
+  udise_code?: string;
   assessment_date: string;
   status: 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
   version: number;

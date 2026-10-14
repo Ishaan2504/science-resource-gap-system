@@ -31,12 +31,14 @@ reportRouter.get('/reports/turnaround',allow('ADMIN'),async(_req,res,next)=>{try
   res.json(paged(rows.rows,page,pageSize,count.rows[0].count));
 }catch(e){next(e);}});
 
-reportRouter.get('/reports/school/:id/history',allow('SCHOOL','ADMIN'),async(req,res,next)=>{try{
+reportRouter.get('/reports/school/:id/history',allow('SCHOOL','ADMIN','FIELD_COORDINATOR'),async(req,res,next)=>{try{
   if(!(await canAccessSchool(req.principal!.userId,req.principal!.role,req.params.id)))throw new ApiError(403,'FORBIDDEN','You cannot view this school history.');
-  const school=await pool.query('SELECT * FROM schools WHERE school_id=$1',[req.params.id]);if(!school.rowCount)throw new ApiError(404,'NOT_FOUND','School not found.');
+  const school=await pool.query('SELECT * FROM schools WHERE school_id::text=$1 OR udise_code=$1',[req.params.id]);
+  if(!school.rowCount)throw new ApiError(404,'NOT_FOUND','School not found.');
+  const targetSchoolId=school.rows[0].school_id;
   const [assessments,requirements]=await Promise.all([
-    pool.query(`SELECT a.*,json_agg(jsonb_build_object('school_resource',sr,'gap',g,'resource_state',CASE WHEN g.gap_qty=0 THEN 'Adequate' WHEN g.gap_qty>0 THEN 'Gap' ELSE NULL END)) FILTER(WHERE sr.school_resource_id IS NOT NULL) AS resources FROM assessments a LEFT JOIN school_resources sr USING(assessment_id) LEFT JOIN gap_records g USING(school_resource_id) WHERE a.school_id=$1 GROUP BY a.assessment_id ORDER BY a.created_at DESC`,[req.params.id]),
-    pool.query(`SELECT r.*,res.name AS resource_name,g.gap_qty,g.gap_ratio,ps.final_score,ps.priority_class,(SELECT json_agg(i ORDER BY i.created_at) FROM interventions i WHERE i.requirement_id=r.requirement_id) AS interventions,(SELECT json_agg(f ORDER BY f.created_at) FROM feedback f WHERE f.requirement_id=r.requirement_id) AS feedback FROM requirements r JOIN resources res USING(resource_id) JOIN gap_records g USING(gap_id) JOIN priority_scores ps ON ps.score_id=r.score_id WHERE r.school_id=$1 ORDER BY r.created_at DESC`,[req.params.id])
+    pool.query(`SELECT a.*,json_agg(jsonb_build_object('school_resource',sr,'resource_name',res.name,'category_name',rc.name,'gap',g,'resource_state',CASE WHEN g.gap_qty=0 THEN 'Adequate' WHEN g.gap_qty>0 THEN 'Gap' ELSE NULL END)) FILTER(WHERE sr.school_resource_id IS NOT NULL) AS resources FROM assessments a LEFT JOIN school_resources sr USING(assessment_id) LEFT JOIN resources res ON res.resource_id=sr.resource_id LEFT JOIN resource_categories rc ON rc.category_id=res.category_id LEFT JOIN gap_records g USING(school_resource_id) WHERE a.school_id=$1 GROUP BY a.assessment_id ORDER BY a.created_at DESC`,[targetSchoolId]),
+    pool.query(`SELECT r.*,res.name AS resource_name,g.gap_qty,g.gap_ratio,ps.final_score,ps.priority_class,(SELECT json_agg(i ORDER BY i.created_at) FROM interventions i WHERE i.requirement_id=r.requirement_id) AS interventions,(SELECT json_agg(f ORDER BY f.created_at) FROM feedback f WHERE f.requirement_id=r.requirement_id) AS feedback FROM requirements r JOIN resources res USING(resource_id) JOIN gap_records g USING(gap_id) JOIN priority_scores ps ON ps.score_id=r.score_id WHERE r.school_id=$1 ORDER BY r.created_at DESC`,[targetSchoolId])
   ]);
   res.json({school:school.rows[0],assessments:assessments.rows,requirements:requirements.rows});
 }catch(e){next(e);}});

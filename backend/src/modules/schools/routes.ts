@@ -60,7 +60,7 @@ schoolRouter.get('/schools/:id',async(req,res,next)=>{
   try {
     const ok=await canAccessSchool(req.principal!.userId,req.principal!.role,req.params.id);
     if(!ok) throw new ApiError(403,'FORBIDDEN','You cannot view this school.');
-    const r=await pool.query('SELECT * FROM schools WHERE school_id=$1',[req.params.id]);
+    const r=await pool.query('SELECT * FROM schools WHERE school_id::text=$1 OR udise_code=$1',[req.params.id]);
     if(!r.rowCount) throw new ApiError(404,'NOT_FOUND','School not found.');
     res.json(r.rows[0]);
   }catch(e){next(e);}
@@ -153,8 +153,219 @@ schoolRouter.patch('/assessments/:id/verify',allow('ADMIN'),async(req,res,next)=
 schoolRouter.get('/schools/:id/assessments',async(req,res,next)=>{
   try {
     if(!await canAccessSchool(req.principal!.userId,req.principal!.role,req.params.id)) throw new ApiError(403,'FORBIDDEN','You cannot view this school history.');
+    const school=await pool.query('SELECT school_id FROM schools WHERE school_id::text=$1 OR udise_code=$1',[req.params.id]);
+    if(!school.rowCount) throw new ApiError(404,'NOT_FOUND','School not found.');
+    const realSchoolId=school.rows[0].school_id;
     const {page,pageSize,offset}=pagination(req);
-    const [list,count]=await Promise.all([pool.query('SELECT * FROM assessments WHERE school_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',[req.params.id,pageSize,offset]),pool.query('SELECT count(*) FROM assessments WHERE school_id=$1',[req.params.id])]);
+    const [list,count]=await Promise.all([
+      pool.query(
+        `SELECT a.*, s.school_name, s.district, s.udise_code,
+                json_agg(jsonb_build_object(
+                  'school_resource_id', sr.school_resource_id,
+                  'resource_id', sr.resource_id,
+                  'resource_name', res.name,
+                  'category_name', rc.name,
+                  'unit', res.unit_of_measure,
+                  'required_qty', sr.required_qty,
+                  'available_qty', sr.available_qty,
+                  'functional_qty', sr.functional_qty,
+                  'condition_rating', sr.condition_rating,
+                  'has_alternative', sr.has_alternative,
+                  'students_affected', sr.students_affected,
+                  'gap_qty', g.gap_qty,
+                  'gap_ratio', g.gap_ratio,
+                  'notes', sr.notes
+                )) FILTER(WHERE sr.school_resource_id IS NOT NULL) AS resources
+         FROM assessments a
+         JOIN schools s USING(school_id)
+         LEFT JOIN school_resources sr USING(assessment_id)
+         LEFT JOIN resources res ON res.resource_id = sr.resource_id
+         LEFT JOIN resource_categories rc ON rc.category_id = res.category_id
+         LEFT JOIN gap_records g USING(school_resource_id)
+         WHERE a.school_id = $1
+         GROUP BY a.assessment_id, s.school_name, s.district, s.udise_code
+         ORDER BY a.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [realSchoolId, pageSize, offset]
+      ),
+      pool.query('SELECT count(*) FROM assessments WHERE school_id=$1',[realSchoolId])
+    ]);
     res.json(paged(list.rows,page,pageSize,count.rows[0].count));
   }catch(e){next(e);}
 });
+
+schoolRouter.get('/assessments',allow('ADMIN','FIELD_COORDINATOR'),async(req,res,next)=>{
+  try {
+    const {page,pageSize,offset}=pagination(req);
+    const search=req.query.search?String(req.query.search):'';
+    const status=req.query.status?String(req.query.status):'';
+    const schoolId=req.query.school_id?String(req.query.school_id):'';
+
+    let whereClause='WHERE 1=1';
+    const params:any[]=[pageSize,offset];
+    let paramIndex=3;
+
+    if(schoolId){
+      whereClause+=` AND (a.school_id::text = $${paramIndex} OR s.udise_code = $${paramIndex})`;
+      params.push(schoolId);
+      paramIndex++;
+    }
+    if(status){
+      whereClause+=` AND a.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+    if(search){
+      whereClause+=` AND (s.school_name ILIKE $${paramIndex} OR s.udise_code ILIKE $${paramIndex} OR a.assessment_id::text ILIKE $${paramIndex} OR s.district ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const sql=`
+      SELECT a.*, s.school_name, s.district, s.udise_code,
+             json_agg(jsonb_build_object(
+               'school_resource_id', sr.school_resource_id,
+               'resource_id', sr.resource_id,
+               'resource_name', res.name,
+               'category_name', rc.name,
+               'unit', res.unit_of_measure,
+               'required_qty', sr.required_qty,
+               'available_qty', sr.available_qty,
+               'functional_qty', sr.functional_qty,
+               'condition_rating', sr.condition_rating,
+               'has_alternative', sr.has_alternative,
+               'students_affected', sr.students_affected,
+               'gap_qty', g.gap_qty,
+               'gap_ratio', g.gap_ratio,
+               'notes', sr.notes
+             )) FILTER(WHERE sr.school_resource_id IS NOT NULL) AS resources
+      FROM assessments a
+      JOIN schools s USING(school_id)
+      LEFT JOIN school_resources sr USING(assessment_id)
+      LEFT JOIN resources res ON res.resource_id = sr.resource_id
+      LEFT JOIN resource_categories rc ON rc.category_id = res.category_id
+      LEFT JOIN gap_records g USING(school_resource_id)
+      ${whereClause}
+      GROUP BY a.assessment_id, s.school_name, s.district, s.udise_code
+      ORDER BY a.created_at DESC
+      LIMIT $1 OFFSET $2
+    `;
+    const countSql=`
+      SELECT count(DISTINCT a.assessment_id)
+      FROM assessments a
+      JOIN schools s USING(school_id)
+      ${whereClause}
+    `;
+    const [list,count]=await Promise.all([
+      pool.query(sql,params),
+      pool.query(countSql,params.slice(2))
+    ]);
+    res.json(paged(list.rows,page,pageSize,count.rows[0].count));
+  }catch(e){next(e);}
+});
+
+const directRequirementInput = z.object({
+  resource_name: z.string().min(1).max(255),
+  category: z.string().min(1).max(100),
+  quantity_requested: z.number().int().positive(),
+  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
+  justification: z.string().optional(),
+});
+
+schoolRouter.post('/schools/:id/direct-requirements', allow('SCHOOL', 'ADMIN'), async (req, res, next) => {
+  try {
+    if (!await canAccessSchool(req.principal!.userId, req.principal!.role, req.params.id)) {
+      throw new ApiError(403, 'FORBIDDEN', 'You cannot submit requirements for this school.');
+    }
+    const school = await pool.query('SELECT school_id FROM schools WHERE school_id::text=$1 OR udise_code=$1', [req.params.id]);
+    if (!school.rowCount) throw new ApiError(404, 'NOT_FOUND', 'School not found.');
+    const realSchoolId = school.rows[0].school_id;
+    const body = directRequirementInput.parse(req.body);
+
+    const inserted = await pool.query(
+      `INSERT INTO school_requirements(school_id, submitted_by, resource_name, category, quantity_requested, urgency, justification)
+       VALUES($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [realSchoolId, req.principal!.userId, body.resource_name, body.category, body.quantity_requested, body.urgency, body.justification ?? null]
+    );
+    res.status(201).json(inserted.rows[0]);
+  } catch (e) { next(e); }
+});
+
+schoolRouter.get('/schools/:id/direct-requirements', async (req, res, next) => {
+  try {
+    if (!await canAccessSchool(req.principal!.userId, req.principal!.role, req.params.id)) {
+      throw new ApiError(403, 'FORBIDDEN', 'You cannot view requirements for this school.');
+    }
+    const school = await pool.query('SELECT school_id FROM schools WHERE school_id::text=$1 OR udise_code=$1', [req.params.id]);
+    if (!school.rowCount) throw new ApiError(404, 'NOT_FOUND', 'School not found.');
+    const realSchoolId = school.rows[0].school_id;
+    const { page, pageSize, offset } = pagination(req);
+
+    const [list, count] = await Promise.all([
+      pool.query(
+        `SELECT sr.*, u.full_name AS submitted_by_name, s.school_name, s.district
+         FROM school_requirements sr
+         JOIN schools s USING(school_id)
+         LEFT JOIN users u ON u.user_id = sr.submitted_by
+         WHERE sr.school_id = $1
+         ORDER BY sr.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [realSchoolId, pageSize, offset]
+      ),
+      pool.query('SELECT count(*) FROM school_requirements WHERE school_id = $1', [realSchoolId]),
+    ]);
+    res.json(paged(list.rows, page, pageSize, count.rows[0].count));
+  } catch (e) { next(e); }
+});
+
+schoolRouter.get('/direct-requirements', allow('ADMIN', 'NGO', 'FIELD_COORDINATOR'), async (req, res, next) => {
+  try {
+    const { page, pageSize, offset } = pagination(req);
+    const search = req.query.search ? String(req.query.search) : '';
+    const status = req.query.status ? String(req.query.status) : '';
+    const urgency = req.query.urgency ? String(req.query.urgency) : '';
+
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [pageSize, offset];
+    let paramIndex = 3;
+
+    if (status) {
+      whereClause += ` AND sr.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+    if (urgency) {
+      whereClause += ` AND sr.urgency = $${paramIndex}`;
+      params.push(urgency);
+      paramIndex++;
+    }
+    if (search) {
+      whereClause += ` AND (s.school_name ILIKE $${paramIndex} OR sr.resource_name ILIKE $${paramIndex} OR s.district ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const [list, count] = await Promise.all([
+      pool.query(
+        `SELECT sr.*, u.full_name AS submitted_by_name, s.school_name, s.district, s.udise_code
+         FROM school_requirements sr
+         JOIN schools s USING(school_id)
+         LEFT JOIN users u ON u.user_id = sr.submitted_by
+         ${whereClause}
+         ORDER BY sr.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        params
+      ),
+      pool.query(
+        `SELECT count(*)
+         FROM school_requirements sr
+         JOIN schools s USING(school_id)
+         ${whereClause}`,
+        params.slice(2)
+      ),
+    ]);
+    res.json(paged(list.rows, page, pageSize, count.rows[0].count));
+  } catch (e) { next(e); }
+});
+
