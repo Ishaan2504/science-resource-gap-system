@@ -16,30 +16,87 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 
 authRouter.post('/register', async (req, res, next) => {
   try {
-    const body = z.object({ email, password, full_name: z.string().min(1).max(150), phone: z.string().regex(/^\+[1-9]\d{1,14}$/).optional(), role: z.enum(['SCHOOL','NGO']), profile: z.record(z.unknown()) }).parse(req.body);
+    const body = z.object({
+      email,
+      password: z.string().min(6),
+      full_name: z.string().min(1).max(150),
+      phone: z.string().regex(/^\+[1-9]\d{1,14}$/).optional(),
+      role: z.enum(['SCHOOL', 'NGO']),
+      profile: z.record(z.unknown()).default({}),
+    }).parse(req.body);
+
     const result = await inTransaction(async (c) => {
-      const user = await c.query('INSERT INTO users(email,password_hash,role,full_name,phone) VALUES($1,$2,$3,$4,$5) RETURNING user_id', [body.email, await bcrypt.hash(body.password, 12), body.role, body.full_name, body.phone ?? null]);
+      const user = await c.query(
+        'INSERT INTO users(email,password_hash,role,full_name,phone) VALUES($1,$2,$3,$4,$5) RETURNING user_id',
+        [body.email, await bcrypt.hash(body.password, 12), body.role, body.full_name, body.phone ?? null]
+      );
       const id = user.rows[0].user_id;
+
       if (body.role === 'SCHOOL') {
-        const p = z.object({ school_name:z.string().min(1),school_type:z.enum(['GOVERNMENT','AIDED','PRIVATE']),district:z.string().min(1),state:z.string().min(1),student_strength_total:z.number().int().nonnegative(),udise_code:z.string().regex(/^\d{11}$/).optional(),address:z.string().optional(),latitude:z.number().min(-90).max(90).optional(),longitude:z.number().min(-180).max(180).optional() }).parse(body.profile);
-        await c.query('INSERT INTO schools(user_id,school_name,school_type,district,state,student_strength_total,udise_code,address,latitude,longitude) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [id,p.school_name,p.school_type,p.district,p.state,p.student_strength_total,p.udise_code ?? null,p.address ?? null,p.latitude ?? null,p.longitude ?? null]);
+        const p = z.object({
+          school_name: z.string().min(1).default(`${body.full_name}'s School`),
+          school_type: z.enum(['GOVERNMENT', 'AIDED', 'PRIVATE']).default('GOVERNMENT'),
+          district: z.string().min(1).default('Bangalore Urban'),
+          state: z.string().min(1).default('Karnataka'),
+          student_strength_total: z.coerce.number().int().nonnegative().default(450),
+          udise_code: z.string().regex(/^\d{11}$/).optional(),
+          address: z.string().optional(),
+        }).parse(body.profile);
+
+        await c.query(
+          'INSERT INTO schools(user_id,school_name,school_type,district,state,student_strength_total,udise_code,address) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+          [id, p.school_name, p.school_type, p.district, p.state, p.student_strength_total, p.udise_code ?? null, p.address ?? null]
+        );
       }
+
       if (body.role === 'NGO') {
-        const p = z.object({ org_name:z.string().min(1),registration_number:z.string().optional(),focus_areas:z.array(z.string()).optional(),service_districts:z.array(z.string()).optional() }).parse(body.profile);
-        await c.query('INSERT INTO organizations(user_id,org_name,registration_number,focus_areas,service_districts) VALUES($1,$2,$3,$4,$5)', [id,p.org_name,p.registration_number ?? null,p.focus_areas ?? null,p.service_districts ?? null]);
+        const p = z.object({
+          org_name: z.string().min(1).default(`${body.full_name}'s Foundation`),
+          registration_number: z.string().optional(),
+        }).parse(body.profile);
+
+        await c.query(
+          'INSERT INTO organizations(user_id,org_name,registration_number,verification_status) VALUES($1,$2,$3,$4)',
+          [id, p.org_name, p.registration_number ?? null, 'VERIFIED']
+        );
       }
-      await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,new_value) VALUES('User',$1,'CREATE',$1,jsonb_build_object('role',$2))", [id,body.role]);
-      return id;
+
+      await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,new_value) VALUES('User',$1,'CREATE',$1,jsonb_build_object('role',$2::text))", [id, body.role]);
+
+      const access = jwt.sign({ role: body.role }, env.accessSecret, { subject: id, expiresIn: '30m' });
+      const refresh = jwt.sign({ token_type: 'refresh' }, env.refreshSecret, { subject: id, expiresIn: '14d' });
+      await c.query("INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '14 days')", [id, hashToken(refresh)]);
+
+      return { user_id: id, role: body.role, access_token: access, refresh_token: refresh };
     });
-    res.status(201).json({ user_id: result, role: body.role });
+
+    res.status(201).json(result);
   } catch (e) { next(e); }
 });
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const body = z.object({ email: z.string().email().transform(v => v.trim().toLowerCase()), password: passwordLogin }).parse(req.body);
-    const found = await pool.query('SELECT user_id,email,password_hash,role,is_active FROM users WHERE lower(email)=$1', [body.email]);
-    if (!found.rowCount || !(await bcrypt.compare(body.password, found.rows[0].password_hash))) throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
+    const rawId = (req.body.identifier ?? req.body.email ?? '') as string;
+    const cleanId = rawId.trim();
+    if (!cleanId) throw new ApiError(400, 'VALIDATION_ERROR', 'Email or UDISE+ code is required.');
+    const password = passwordLogin.parse(req.body.password);
+
+    let found;
+    if (/^\d{11}$/.test(cleanId)) {
+      found = await pool.query(
+        'SELECT u.user_id, u.email, u.password_hash, u.role, u.is_active FROM schools s JOIN users u USING(user_id) WHERE s.udise_code=$1',
+        [cleanId]
+      );
+    } else {
+      found = await pool.query(
+        'SELECT user_id, email, password_hash, role, is_active FROM users WHERE lower(email)=$1',
+        [cleanId.toLowerCase()]
+      );
+    }
+
+    if (!found.rowCount || !(await bcrypt.compare(password, found.rows[0].password_hash))) {
+      throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
+    }
     const user = found.rows[0];
     if (!user.is_active) throw new ApiError(403, 'INACTIVE_ACCOUNT', 'Account is inactive.');
     const access = jwt.sign({ role: user.role }, env.accessSecret, { subject: user.user_id, expiresIn: '30m' });

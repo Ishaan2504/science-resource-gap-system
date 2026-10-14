@@ -7,8 +7,10 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/shared/rbac.test.ts",
     "migrate": "tsx src/db/migrate.ts",
-    "seed:admin": "tsx src/db/seed-admin.ts"
+    "seed:admin": "tsx src/db/seed-admin.ts",
+    "seed:demo": "tsx src/db/seed-test-data.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

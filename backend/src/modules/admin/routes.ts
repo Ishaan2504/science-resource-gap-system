@@ -37,8 +37,29 @@ adminRouter.get('/users',allow('ADMIN'),async(req,res,next)=>{try{const {page,pa
 adminRouter.get('/organizations',allow('ADMIN'),async(req,res,next)=>{try{const {page,pageSize,offset}=pagination(req);const [rows,count]=await Promise.all([pool.query('SELECT * FROM organizations ORDER BY created_at DESC LIMIT $1 OFFSET $2',[pageSize,offset]),pool.query('SELECT count(*) FROM organizations')]);res.json(paged(rows.rows,page,pageSize,count.rows[0].count));}catch(e){next(e);}});
 
 adminRouter.post('/users',allow('ADMIN'),async(req,res,next)=>{try{
-  const p=z.object({email:z.string().email().max(255),password:z.string().min(10).regex(/[A-Za-z]/).regex(/[0-9]/),full_name:z.string().min(1).max(150),phone:z.string().regex(/^\+[1-9]\d{1,14}$/).optional(),role:z.enum(['FIELD_COORDINATOR','ADMIN'])}).parse(req.body);
-  const r=await inTransaction(async(c)=>{const user=await c.query('INSERT INTO users(email,password_hash,role,full_name,phone) VALUES(lower($1),$2,$3,$4,$5) RETURNING user_id,email,role,full_name,phone,is_active',[p.email,await bcrypt.hash(p.password,12),p.role,p.full_name,p.phone??null]);await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,new_value) VALUES('User',$1,'CREATE',$2,jsonb_build_object('role',$3,'email',$4))",[user.rows[0].user_id,req.principal!.userId,p.role,p.email]);return user.rows[0];});res.status(201).json(r);
+  const p=z.object({
+    email:z.string().email().max(255),
+    password:z.string().min(8),
+    full_name:z.string().min(1).max(150),
+    phone:z.string().regex(/^\+[1-9]\d{1,14}$/).optional(),
+    role:z.enum(['SCHOOL','NGO','FIELD_COORDINATOR','ADMIN']),
+    school_name:z.string().optional(),
+    org_name:z.string().optional()
+  }).parse(req.body);
+  const r=await inTransaction(async(c)=>{
+    const user=await c.query('INSERT INTO users(email,password_hash,role,full_name,phone) VALUES(lower($1),$2,$3,$4,$5) RETURNING user_id,email,role,full_name,phone,is_active',[p.email,await bcrypt.hash(p.password,12),p.role,p.full_name,p.phone??null]);
+    const uid=user.rows[0].user_id;
+    if(p.role==='SCHOOL'){
+      await c.query('INSERT INTO schools(user_id,school_name,school_type,district,state,student_strength_total) VALUES($1,$2,$3,$4,$5,$6)',
+        [uid,p.school_name||`${p.full_name}'s School`,'GOVERNMENT','Bangalore','Karnataka',450]);
+    } else if(p.role==='NGO'){
+      await c.query('INSERT INTO organizations(user_id,org_name,verification_status) VALUES($1,$2,$3)',
+        [uid,p.org_name||`${p.full_name}'s Foundation`,'VERIFIED']);
+    }
+    await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,new_value) VALUES('User',$1,'CREATE',$2,jsonb_build_object('role',$3,'email',$4))",[uid,req.principal!.userId,p.role,p.email]);
+    return user.rows[0];
+  });
+  res.status(201).json(r);
 }catch(e){next(e);}});
 adminRouter.patch('/users/:id',allow('ADMIN'),async(req,res,next)=>{try{
   const p=z.object({role:z.enum(['SCHOOL','NGO','ADMIN','FIELD_COORDINATOR']).optional(),is_active:z.boolean().optional()}).refine(v=>Object.keys(v).length>0).parse(req.body);

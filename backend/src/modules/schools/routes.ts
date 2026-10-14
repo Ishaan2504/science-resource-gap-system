@@ -21,6 +21,42 @@ schoolRouter.post('/schools',allow('SCHOOL'),async(req,res,next)=>{
   }catch(e){next(e);}
 });
 
+schoolRouter.get('/schools',allow('ADMIN','NGO','FIELD_COORDINATOR','SCHOOL'),async(req,res,next)=>{
+  try{
+    const {page,pageSize,offset}=pagination(req);
+    const filters:string[]=[]; const values:unknown[]=[];
+    if(req.principal!.role==='SCHOOL'){
+      values.push(req.principal!.userId);
+      filters.push(`s.user_id=$${values.length}`);
+    }else if(req.principal!.role==='FIELD_COORDINATOR'){
+      values.push(req.principal!.userId);
+      filters.push(`EXISTS(SELECT 1 FROM field_coordinator_schools fcs WHERE fcs.school_id=s.school_id AND fcs.coordinator_user_id=$${values.length})`);
+    }else if(req.principal!.role==='NGO'){
+      filters.push(`s.verification_status='VERIFIED'`);
+    }
+
+    if(req.query.search&&typeof req.query.search==='string'&&req.query.search.trim()){
+      values.push(`%${req.query.search.trim().toLowerCase()}%`);
+      filters.push(`(lower(s.school_name) LIKE $${values.length} OR s.udise_code LIKE $${values.length})`);
+    }
+    if(req.query.district&&typeof req.query.district==='string'&&req.query.district.trim()){
+      values.push(req.query.district.trim());
+      filters.push(`s.district=$${values.length}`);
+    }
+    if(req.query.verification_status&&typeof req.query.verification_status==='string'&&req.query.verification_status.trim()){
+      values.push(req.query.verification_status.trim());
+      filters.push(`s.verification_status=$${values.length}`);
+    }
+
+    const where=filters.length?`WHERE ${filters.join(' AND ')}`:'';
+    const [rows,count]=await Promise.all([
+      pool.query(`SELECT s.* FROM schools s ${where} ORDER BY s.school_name ASC LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,pageSize,offset]),
+      pool.query(`SELECT count(*)::int AS n FROM schools s ${where}`,values),
+    ]);
+    res.json(paged(rows.rows,page,pageSize,count.rows[0].n));
+  }catch(e){next(e);}
+});
+
 schoolRouter.get('/schools/:id',async(req,res,next)=>{
   try {
     const ok=await canAccessSchool(req.principal!.userId,req.principal!.role,req.params.id);
@@ -30,6 +66,56 @@ schoolRouter.get('/schools/:id',async(req,res,next)=>{
     res.json(r.rows[0]);
   }catch(e){next(e);}
 });
+
+const schoolUpdateInput = z.object({
+  school_name: z.string().min(1).max(255).optional(),
+  udise_code: z.string().regex(/^\d{11}$/).optional().nullable(),
+  school_type: z.enum(['GOVERNMENT','AIDED','PRIVATE']).optional(),
+  district: z.string().min(1).max(100).optional(),
+  state: z.string().min(1).max(100).optional(),
+  address: z.string().optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  student_strength_total: z.number().int().nonnegative().optional(),
+  contact_person: z.string().max(150).optional().nullable(),
+  contact_phone: z.string().optional().nullable(),
+});
+
+schoolRouter.patch('/schools/:id',allow('ADMIN','SCHOOL'),async(req,res,next)=>{
+  try{
+    const p=schoolUpdateInput.parse(req.body);
+    const updated=await inTransaction(async(c)=>{
+      const existing=await c.query('SELECT * FROM schools WHERE school_id=$1 FOR UPDATE',[req.params.id]);
+      if(!existing.rowCount) throw new ApiError(404,'NOT_FOUND','School not found.');
+      const s=existing.rows[0];
+      if(req.principal!.role==='SCHOOL'&&s.user_id!==req.principal!.userId){
+        throw new ApiError(403,'FORBIDDEN','You can only edit your own school profile.');
+      }
+      const nextData={
+        school_name: p.school_name ?? s.school_name,
+        udise_code: p.udise_code!==undefined ? p.udise_code : s.udise_code,
+        school_type: p.school_type ?? s.school_type,
+        district: p.district ?? s.district,
+        state: p.state ?? s.state,
+        address: p.address!==undefined ? p.address : s.address,
+        latitude: p.latitude!==undefined ? p.latitude : s.latitude,
+        longitude: p.longitude!==undefined ? p.longitude : s.longitude,
+        student_strength_total: p.student_strength_total ?? s.student_strength_total,
+        contact_person: p.contact_person!==undefined ? p.contact_person : s.contact_person,
+        contact_phone: p.contact_phone!==undefined ? p.contact_phone : s.contact_phone,
+      };
+      await c.query(`UPDATE schools SET school_name=$2, udise_code=$3, school_type=$4, district=$5, state=$6, address=$7, latitude=$8, longitude=$9, student_strength_total=$10, contact_person=$11, contact_phone=$12 WHERE school_id=$1`,[
+        req.params.id, nextData.school_name, nextData.udise_code, nextData.school_type, nextData.district, nextData.state, nextData.address, nextData.latitude, nextData.longitude, nextData.student_strength_total, nextData.contact_person, nextData.contact_phone
+      ]);
+      await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,old_value,new_value) VALUES('School',$1,'UPDATE',$2,$3::jsonb,$4::jsonb)",[
+        req.params.id, req.principal!.userId, JSON.stringify(s), JSON.stringify(nextData)
+      ]);
+      return (await c.query('SELECT * FROM schools WHERE school_id=$1',[req.params.id])).rows[0];
+    });
+    res.json(updated);
+  }catch(e){next(e);}
+});
+
 
 schoolRouter.patch('/schools/:id/verify',allow('ADMIN'),async(req,res,next)=>{
   try {
@@ -69,7 +155,7 @@ schoolRouter.post('/schools/:id/assessments',allow('SCHOOL','FIELD_COORDINATOR')
   }catch(e){next(e);}
 });
 
-schoolRouter.patch('/assessments/:id',async(req,res,next)=>{
+schoolRouter.patch('/assessments/:id',allow('SCHOOL','FIELD_COORDINATOR'),async(req,res,next)=>{
   try{
     const p=z.object({expected_version:z.number().int().positive(),resources:z.array(z.object({resource_id:z.string().uuid(),required_qty:z.number().int().nonnegative(),available_qty:z.number().int().nonnegative(),functional_qty:z.number().int().nonnegative(),condition_rating:z.enum(['GOOD','FAIR','POOR','NOT_APPLICABLE']),has_alternative:z.enum(['NONE','PARTIAL','FULL']).default('NONE'),students_affected:z.number().int().nonnegative().optional(),notes:z.string().optional()}).refine(x=>x.functional_qty<=x.available_qty).refine(x=>(x.available_qty===0)===(x.condition_rating==='NOT_APPLICABLE')))}).parse(req.body);
     const row=await inTransaction(async(c)=>{
@@ -87,14 +173,14 @@ schoolRouter.patch('/assessments/:id',async(req,res,next)=>{
   }catch(e){next(e);}
 });
 
-schoolRouter.post('/assessments/:id/submit',async(req,res,next)=>{
+schoolRouter.post('/assessments/:id/submit',allow('SCHOOL','FIELD_COORDINATOR'),async(req,res,next)=>{
   try {
     const body=z.object({expected_version:z.number().int().positive()}).parse(req.body);
     const r=await inTransaction(async(c)=>{
       const q=await c.query(`SELECT a.*,s.user_id,s.student_strength_total FROM assessments a JOIN schools s USING(school_id) WHERE assessment_id=$1 FOR UPDATE`,[req.params.id]);
       if(!q.rowCount) throw new ApiError(404,'NOT_FOUND','Assessment not found.');
       const a=q.rows[0];
-      if(a.submitted_by!==req.principal!.userId) throw new ApiError(403,'FORBIDDEN','Only the assessment owner can submit it.');
+      if(a.submitted_by!==req.principal!.userId||!await canAccessSchool(req.principal!.userId,req.principal!.role,a.school_id)) throw new ApiError(403,'FORBIDDEN','Only the assessment owner can submit it.');
       if(a.status!=='DRAFT') throw new ApiError(409,'INVALID_ASSESSMENT_STATE','Only draft assessments can be submitted.',{current_status:a.status});
       if(Number(a.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Assessment changed since it was read.',{current:a});
       const count=await c.query('SELECT count(*)::int AS n FROM school_resources WHERE assessment_id=$1',[req.params.id]);

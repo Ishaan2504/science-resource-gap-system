@@ -13,6 +13,12 @@ frontend/.env.*
 # Logs
 *.log
 
+# Binaries & Builds
+cloudflared.exe
+*.apk
+backend/dist/
+frontend/dist/
+
 # OS
 .DS_Store
 Thumbs.db

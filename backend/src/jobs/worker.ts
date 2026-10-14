@@ -4,14 +4,23 @@ import { inTransaction, pool } from '../db/pool';
 import { env } from '../config/env';
 import { calculatePriority, WeightConfig } from '../domain/priority-engine';
 
-export async function startWorkers(){
-  const worker=new Worker('science-resource-gap',async job=>{
-    if(job.name==='auto-close') return closeCompleted();
-    if(job.name==='recompute-priority') return recompute(job.data.kind,job.data.categoryId);
-  },{connection:redis,concurrency:2});
-  await worker.waitUntilReady();
-  await jobs.upsertJobScheduler('requirement-auto-close',{pattern:'0 * * * *'},{name:'auto-close',data:{},opts:{removeOnComplete:true}});
-  return worker;
+export async function startWorkers(): Promise<Worker | null> {
+  if (!redis || !jobs) {
+    console.log('[Worker] Redis not configured. Background jobs worker skipped.');
+    return null;
+  }
+  try {
+    const worker = new Worker('science-resource-gap', async job => {
+      if (job.name === 'auto-close') return closeCompleted();
+      if (job.name === 'recompute-priority') return recompute(job.data.kind, job.data.categoryId);
+    }, { connection: redis, concurrency: 2 });
+    await worker.waitUntilReady();
+    await jobs.upsertJobScheduler('requirement-auto-close', { pattern: '0 * * * *' }, { name: 'auto-close', data: {}, opts: { removeOnComplete: true } });
+    return worker;
+  } catch (err) {
+    console.warn('[Worker] Could not connect to Redis worker:', err);
+    return null;
+  }
 }
 
 async function closeCompleted(){

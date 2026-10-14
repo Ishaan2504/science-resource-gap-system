@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Science on Wheels</string>
+    <string name="title_activity_main">Science on Wheels</string>
+    <string name="package_name">com.example.idealabapp</string>
+    <string name="custom_url_scheme">com.example.idealabapp</string>
+</resources>

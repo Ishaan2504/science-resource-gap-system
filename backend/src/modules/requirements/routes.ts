@@ -4,6 +4,7 @@ import { pool, inTransaction } from '../../db/pool';
 import { allow, authenticate, canAccessSchool } from '../../middleware/auth';
 import { ApiError } from '../../shared/errors';
 import { pagination, paged } from '../../shared/pagination';
+import { canNgoViewRequirement, schoolVisibleFeedback, schoolVisibleInterventions, schoolVisibleRequirement } from '../../shared/rbac';
 
 export const requirementRouter=Router();
 requirementRouter.use(authenticate);
@@ -14,6 +15,14 @@ requirementRouter.get('/requirements',allow('NGO','ADMIN','SCHOOL','FIELD_COORDI
   try{
     const {page,pageSize,offset}=pagination(req);
     const filters:string[]=[]; const values:unknown[]=[];
+    if(req.principal!.role==='NGO'){
+      const org=await pool.query('SELECT org_id,verification_status FROM organizations WHERE user_id=$1',[req.principal!.userId]);
+      if(!org.rowCount||org.rows[0].verification_status!=='VERIFIED') filters.push('false');
+      else {
+        values.push(org.rows[0].org_id);
+        filters.push(`(r.assigned_org_id=$${values.length} OR (r.assigned_org_id IS NULL AND r.status IN ('OPEN','UNDER_REVIEW')))`);
+      }
+    }
     if(req.query.priority_class){values.push(req.query.priority_class);filters.push(`ps.priority_class=$${values.length}`);}
     if(req.query.status){values.push(req.query.status);filters.push(`r.status=$${values.length}`);}
     if(req.query.district){values.push(req.query.district);filters.push(`s.district=$${values.length}`);}
@@ -45,19 +54,26 @@ requirementRouter.get('/requirements/:id',allow('NGO','ADMIN','SCHOOL','FIELD_CO
     if(!q.rowCount) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
     const row=q.rows[0];
     if((req.principal!.role==='SCHOOL'||req.principal!.role==='FIELD_COORDINATOR')&&!(await canAccessSchool(req.principal!.userId,req.principal!.role,row.school_id))) throw new ApiError(403,'FORBIDDEN','You cannot view this requirement.');
-    if(req.principal!.role==='NGO'&&(row.school_verification!=='VERIFIED'||row.assessment_status!=='VERIFIED')) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
-    if(req.principal!.role==='NGO'&&row.status==='OPEN'){
-      await inTransaction(async(c)=>{
-        const lock=await c.query('SELECT status,version FROM requirements WHERE requirement_id=$1 FOR UPDATE',[req.params.id]);
-        if(lock.rows[0]?.status==='OPEN'){
-          await c.query("UPDATE requirements SET status='UNDER_REVIEW',version=version+1 WHERE requirement_id=$1",[req.params.id]);
-          await c.query("INSERT INTO requirement_status_events(requirement_id,old_status,new_status,actor_id) VALUES($1,'OPEN','UNDER_REVIEW',$2)",[req.params.id,req.principal!.userId]);
-          await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,old_value,new_value) VALUES('Requirement',$1,'STATUS_CHANGE',$2,jsonb_build_object('status','OPEN'),jsonb_build_object('status','UNDER_REVIEW'))",[req.params.id,req.principal!.userId]);
-        }
-      });
-      row.status='UNDER_REVIEW'; row.version=Number(row.version)+1;
+    if(req.principal!.role==='NGO'){
+      const org=await pool.query('SELECT org_id,verification_status FROM organizations WHERE user_id=$1',[req.principal!.userId]);
+      const orgId=org.rows[0]?.org_id??null;
+      const owns=!!orgId&&row.assigned_org_id===orgId;
+      if(!canNgoViewRequirement(row,orgId,org.rows[0]?.verification_status==='VERIFIED')) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
+      const interventions=owns?(row.interventions??[]).filter((i:any)=>i.org_id===org.rows[0].org_id).map((i:any)=>({status_at_entry:i.status_at_entry,created_at:i.created_at})):[];
+      const feedback=(row.feedback??[]).filter((f:any)=>f.source==='SCHOOL');
+      const {school_user_id:_schoolUserId,school_verification:_schoolVerification,assessment_status:_assessmentStatus,interventions:_allInterventions,feedback:_allFeedback,...visible}=row;
+      res.json({...visible,interventions,feedback});
+      return;
     }
-    res.json(row);
+    if(req.principal!.role==='SCHOOL'){
+      const interventions=schoolVisibleInterventions(row.interventions);
+      const feedback=schoolVisibleFeedback(row.feedback);
+      const {school_user_id:_schoolUserId,school_verification:_schoolVerification,assessment_status:_assessmentStatus,interventions:_allInterventions,feedback:_allFeedback,...visible}=row;
+      res.json({...schoolVisibleRequirement(visible),interventions,feedback});
+      return;
+    }
+    const {school_user_id:_schoolUserId,school_verification:_schoolVerification,assessment_status:_assessmentStatus,...visible}=row;
+    res.json(visible);
   }catch(e){next(e);}
 });
 
@@ -73,9 +89,9 @@ requirementRouter.post('/requirements/:id/accept',allow('NGO'),async(req,res,nex
       if(!row.rowCount) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
       const r=row.rows[0];
       if(r.school_verification!=='VERIFIED'||r.assessment_status!=='VERIFIED') throw new ApiError(404,'NOT_FOUND','Requirement not found.');
-      if(Number(r.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:r});
+      if(r.assigned_org_id&&r.assigned_org_id!==org.rows[0].org_id) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
+      if(Number(r.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:{status:r.status,version:r.version}});
       if(!['OPEN','UNDER_REVIEW'].includes(r.status)) throw new ApiError(409,'INVALID_TRANSITION','Only OPEN or UNDER_REVIEW requirements can be accepted.',{current_status:r.status,attempted_status:'ACCEPTED'});
-      if(r.assigned_org_id&&r.assigned_org_id!==org.rows[0].org_id) throw new ApiError(409,'ALREADY_ASSIGNED','Requirement is assigned to another organization.');
       await c.query("UPDATE requirements SET status='ACCEPTED',assigned_org_id=$2,version=version+1,accepted_gap_qty=(SELECT gap_qty FROM gap_records WHERE gap_id=requirements.gap_id) WHERE requirement_id=$1",[req.params.id,org.rows[0].org_id]);
       await c.query("INSERT INTO interventions(requirement_id,org_id,action_description,status_at_entry,updated_by) VALUES($1,$2,'Accepted requirement','ACCEPTED',$3)",[req.params.id,org.rows[0].org_id,req.principal!.userId]);
       await c.query("INSERT INTO requirement_status_events(requirement_id,old_status,new_status,actor_id) VALUES($1,$2,'ACCEPTED',$3)",[req.params.id,r.status,req.principal!.userId]);
@@ -93,9 +109,9 @@ requirementRouter.post('/requirements/:id/acknowledge-data-change',allow('NGO'),
       const q=await c.query('SELECT * FROM requirements WHERE requirement_id=$1 FOR UPDATE',[req.params.id]);
       if(!q.rowCount)throw new ApiError(404,'NOT_FOUND','Requirement not found.');
       const r=q.rows[0];
-      if(Number(r.version)!==body.expected_version)throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:r});
-      const org=await c.query('SELECT org_id FROM organizations WHERE user_id=$1',[req.principal!.userId]);
-      if(!org.rowCount||org.rows[0].org_id!==r.assigned_org_id)throw new ApiError(403,'FORBIDDEN','Only the assigned organization can acknowledge this change.');
+      const org=await c.query("SELECT org_id FROM organizations WHERE user_id=$1 AND verification_status='VERIFIED'",[req.principal!.userId]);
+      if(!org.rowCount||org.rows[0].org_id!==r.assigned_org_id)throw new ApiError(403,'FORBIDDEN','Only the verified assigned organization can acknowledge this change.');
+      if(Number(r.version)!==body.expected_version)throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:{version:r.version}});
       if(!r.data_changed_since_acceptance)throw new ApiError(409,'NO_DATA_CHANGE','There is no unacknowledged assessment change.');
       const latest=await c.query(`SELECT g.gap_id,ps.score_id,g.gap_qty FROM assessments a JOIN school_resources sr USING(assessment_id) JOIN gap_records g USING(school_resource_id)
         JOIN priority_scores ps ON ps.school_resource_id=sr.school_resource_id WHERE a.school_id=$1 AND a.status='VERIFIED' AND sr.resource_id=$2 ORDER BY a.verified_at DESC,ps.computed_at DESC LIMIT 1`,[r.school_id,r.resource_id]);
@@ -114,14 +130,15 @@ requirementRouter.post('/requirements/:id/status',allow('NGO','ADMIN'),async(req
       const lock=await c.query(`SELECT r.*,g.gap_qty AS current_gap_qty FROM requirements r JOIN gap_records g USING(gap_id) WHERE requirement_id=$1 FOR UPDATE`,[req.params.id]);
       if(!lock.rowCount) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
       const r=lock.rows[0];
-      if(Number(r.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:r});
-      const transitions:Record<string,string[]>={UNDER_REVIEW:['OPEN'],ACCEPTED:['IN_PROGRESS'],IN_PROGRESS:['PARTIALLY_COMPLETED','COMPLETED','NOT_FEASIBLE'],PARTIALLY_COMPLETED:['IN_PROGRESS','COMPLETED','NOT_FEASIBLE'],NOT_FEASIBLE:['OPEN'],DISPUTED:['IN_PROGRESS','CLOSED']};
-      if(!transitions[r.status]?.includes(body.new_status)) throw new ApiError(409,'INVALID_TRANSITION',`Cannot move requirement from ${r.status} to ${body.new_status}.`,{current_status:r.status,attempted_status:body.new_status});
       const isAdmin=req.principal!.role==='ADMIN';
       if(!isAdmin){
-        const org=await c.query('SELECT org_id FROM organizations WHERE user_id=$1',[req.principal!.userId]);
-        const closingReview=r.status==='UNDER_REVIEW'&&body.new_status==='OPEN';
-        if(!org.rowCount||(!closingReview&&org.rows[0].org_id!==r.assigned_org_id)) throw new ApiError(403,'FORBIDDEN','Only the assigned organization can update this requirement.');
+        const org=await c.query("SELECT org_id FROM organizations WHERE user_id=$1 AND verification_status='VERIFIED'",[req.principal!.userId]);
+        if(!org.rowCount||org.rows[0].org_id!==r.assigned_org_id) throw new ApiError(403,'FORBIDDEN','Only the verified assigned organization can update this requirement.');
+      }
+      if(Number(r.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:{status:r.status,version:r.version}});
+      const transitions:Record<string,string[]>={UNDER_REVIEW:['OPEN'],ACCEPTED:['IN_PROGRESS'],IN_PROGRESS:['PARTIALLY_COMPLETED','COMPLETED','NOT_FEASIBLE'],PARTIALLY_COMPLETED:['IN_PROGRESS','COMPLETED','NOT_FEASIBLE'],NOT_FEASIBLE:['OPEN'],DISPUTED:['IN_PROGRESS','CLOSED']};
+      if(!transitions[r.status]?.includes(body.new_status)) throw new ApiError(409,'INVALID_TRANSITION',`Cannot move requirement from ${r.status} to ${body.new_status}.`,{current_status:r.status,attempted_status:body.new_status});
+      if(!isAdmin){
         if(body.new_status==='OPEN'||body.new_status==='CLOSED'||body.new_status==='DISPUTED') throw new ApiError(403,'FORBIDDEN','This transition requires an Admin or school confirmation.');
       }
       if(r.status==='DISPUTED'&&!isAdmin) throw new ApiError(403,'FORBIDDEN','Only an Admin can resolve a dispute.');
@@ -157,16 +174,16 @@ requirementRouter.post('/requirements/:id/feedback',allow('SCHOOL','NGO','ADMIN'
   try{
     const body=z.object({source:z.enum(['SCHOOL','NGO','ADMIN']).optional(),confirmation:z.enum(['CONFIRMED','DISPUTED']).optional(),comments:z.string().optional(),evidence_url:z.string().url().optional(),expected_version:z.number().int().positive().optional()}).parse(req.body);
     const result=await inTransaction(async(c)=>{
-      const q=await c.query(`SELECT r.*,s.user_id AS school_user_id,o.user_id AS org_user_id FROM requirements r JOIN schools s USING(school_id) LEFT JOIN organizations o ON o.org_id=r.assigned_org_id WHERE requirement_id=$1 FOR UPDATE`,[req.params.id]);
+      const q=await c.query(`SELECT r.*,s.user_id AS school_user_id,o.user_id AS org_user_id,o.verification_status AS org_verification_status FROM requirements r JOIN schools s USING(school_id) LEFT JOIN organizations o ON o.org_id=r.assigned_org_id WHERE requirement_id=$1 FOR UPDATE OF r`,[req.params.id]);
       if(!q.rowCount) throw new ApiError(404,'NOT_FOUND','Requirement not found.');
       const r=q.rows[0]; const source=body.source??req.principal!.role;
       if(source==='SCHOOL'){
-        if(body.expected_version===undefined||Number(r.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:r});
         if(req.principal!.role!=='SCHOOL'||r.school_user_id!==req.principal!.userId) throw new ApiError(403,'FORBIDDEN','Only the school can submit school confirmation.');
+        if(body.expected_version===undefined||Number(r.version)!==body.expected_version) throw new ApiError(409,'VERSION_CONFLICT','Requirement changed since it was read.',{current:{status:r.status,version:r.version}});
         if(r.status!=='COMPLETED') throw new ApiError(409,'INVALID_TRANSITION','School confirmation is accepted only for completed requirements.',{current_status:r.status});
         if(!body.confirmation) throw new ApiError(400,'VALIDATION_ERROR','School feedback requires confirmation.');
       } else if(source==='NGO') {
-        if(req.principal!.role!=='NGO'||r.org_user_id!==req.principal!.userId) throw new ApiError(403,'FORBIDDEN','Only the assigned organization can submit NGO feedback.');
+        if(req.principal!.role!=='NGO'||r.org_user_id!==req.principal!.userId||r.org_verification_status!=='VERIFIED') throw new ApiError(403,'FORBIDDEN','Only the verified assigned organization can submit NGO feedback.');
       } else if(req.principal!.role!=='ADMIN') throw new ApiError(403,'FORBIDDEN','Only an Admin can submit Admin feedback.');
       const f=await c.query('INSERT INTO feedback(requirement_id,source,confirmation,comments,evidence_url) VALUES($1,$2,$3,$4,$5) RETURNING *',[req.params.id,source,source==='SCHOOL'?body.confirmation:null,body.comments??null,body.evidence_url??null]);
       await c.query("INSERT INTO audit_logs(entity_type,entity_id,action,performed_by,new_value) VALUES('Feedback',$1,'CREATE',$2,jsonb_build_object('requirement_id',$3,'source',$4,'confirmation',$5,'comments',$6))",[f.rows[0].feedback_id,req.principal!.userId,req.params.id,source,body.confirmation??null,body.comments??null]);

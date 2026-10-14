@@ -42,6 +42,23 @@ export interface Requirement {
   status: RequirementStatus;
   version: number;
   data_changed_since_acceptance?: boolean;
+  assigned_ngo?: string;
+  created_at?: string;
+  breakdown?: {
+    severity: number;
+    importance: number;
+    students_affected: number;
+    alternative_availability: number;
+    condition: number;
+  };
+}
+
+export interface PortalActivity {
+  id: string;
+  at: string;
+  actor: string;
+  text: string;
+  kind: 'info' | 'success' | 'warning' | 'error';
 }
 
 export interface Page<T> {
@@ -108,6 +125,28 @@ export interface AdminUser {
   role: Role;
   full_name: string;
   is_active: boolean;
+}
+
+export type FeedbackCategory = 'INSTRUCTOR' | 'SERVICE' | 'EQUIPMENT';
+
+export interface UserFeedback {
+  feedback_id: string;
+  submitted_by: string;
+  submitted_by_name?: string;
+  submitted_by_role?: Role;
+  category: FeedbackCategory;
+  target_name: string;
+  rating: number;
+  comments: string;
+  school_id?: string | null;
+  school_name?: string | null;
+  created_at: string;
+}
+
+export interface FaqAssistantReply {
+  answer: string;
+  sources: string[];
+  mode: 'AI' | 'FAQ';
 }
 
 export interface ApiErrorBody {
